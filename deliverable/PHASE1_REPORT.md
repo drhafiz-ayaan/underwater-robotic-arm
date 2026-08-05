@@ -10,7 +10,7 @@ ROS 2 **Jazzy** + **Gazebo Harmonic** (gz-sim 8.11).
 | 2. Camera integrated into URDF + Gazebo | **Verified running** |
 | 3. Underwater world: buoyancy, drag, seabed, lighting, floating/sinking objects | **Verified running** |
 | 4. Launch files spawning world + robot together | **Verified running** |
-| Demonstration video | Blocked — see `RECORD_VIDEO.md` |
+| Demonstration video | **Recorded** — 56 s, 1280x720, H.264 |
 
 All three controllers (`joint_state_broadcaster`, `arm_controller`,
 `gripper_controller`) configure and activate, and the scripted motion sequence in
@@ -100,14 +100,21 @@ triggers the same assertion. The seabed is a 12 m thin box.
 Also: `graded_buoyancy` supports only `<box>` and `<sphere>` collisions — a
 cylinder is silently given zero buoyancy.
 
-## Known gap: offscreen rendering
+## Trap worth remembering: orphaned Gazebo servers
 
-Gazebo's headless offscreen sensor rendering on this machine intermittently omits
-the spawned robot's visuals. Sampling 360 frames of a recording yields several
-distinct renders of the same static scene, most without the arm. Pinning the
-NVIDIA EGL vendor, reducing shadow-casting lights to one, and splitting the ROS
-image bridges each failed to fix it. Physics, control and the sensor data streams
-are unaffected. Record via the Gazebo GUI instead — see `RECORD_VIDEO.md`.
+gz-transport topics are global to the machine, so a `gz sim` server left running
+from an earlier session keeps publishing `/scene_camera/image` alongside the live
+one. The ROS bridge receives both, and the recording cuts between two different
+simulations several times a second - the robot present in one frame, absent the
+next, lighting jumping. Nothing in the logs flags it, and it is easily
+misdiagnosed as a GPU or renderer fault.
+
+The same orphans break other things: the GUI attaches to a stale world and shows
+an empty viewport, `/clock` gets duplicate publishers, and controller spawners
+fail with "Controller already loaded".
+
+Always check `pgrep -af "gz sim"` before a run. Frame-brightness variance detects
+a corrupted recording immediately - see `RECORD_VIDEO.md`.
 
 ## Known gaps
 

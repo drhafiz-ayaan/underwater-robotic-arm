@@ -8,8 +8,8 @@
 |---|---|
 | `PHASE1_REPORT.md` | Technical report — findings, decisions, verification |
 | `stills/` | Renders of the arm in the underwater scene |
-| `video/` | Demonstration video (see `RECORD_VIDEO.md` — **not yet recorded**) |
-| `RECORD_VIDEO.md` | How to record the video, and why it is not automated yet |
+| `video/` | Demonstration video — 56 s, 1280x720, H.264, 1.2 MB |
+| `RECORD_VIDEO.md` | How to re-record it, and the orphaned-server trap |
 | `../panda_ws/` | The ROS 2 workspace (two packages) |
 
 ## Status at a glance
@@ -20,7 +20,7 @@
 | 2. Camera integrated into URDF and Gazebo | **Working** — wrist RGB-D publishes image, depth, points, camera_info |
 | 3. Underwater world: buoyancy, drag, seabed, lighting, floating/sinking objects | **Working and measured** |
 | 4. Launch files spawning world + robot together | **Working** |
-| Demonstration video | **Blocked** on a Gazebo offscreen-rendering fault — record via GUI, see `RECORD_VIDEO.md` |
+| Demonstration video | **Recorded** — `video/uw_arm_phase1_demo.mp4` |
 
 ## The headline finding
 
