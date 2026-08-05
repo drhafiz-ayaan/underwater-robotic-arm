@@ -125,9 +125,15 @@
   <!--  a non-static model, so anchor via a fixed joint rather than <static>. -->
   <!-- ==================================================================== -->
   <link name="world"/>
+  <!-- The pedestal height lives HERE, and the model is spawned at z=0, so TF and
+       Gazebo agree on where the robot is. Spawning at z=0.5 against an identity
+       joint instead leaves robot_state_publisher placing base_link at world z=0
+       while physics has it at 0.5: every TF-derived target is then half a metre
+       out and IK cannot converge on it. -->
+  <xacro:property name="base_mount_z" value="0.5"/>
   <joint name="world_to_base" type="fixed">
     <parent link="world"/><child link="base_link"/>
-    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <origin xyz="0 0 ${base_mount_z}" rpy="0 0 0"/>
   </joint>
 
   <!-- ==================================================================== -->

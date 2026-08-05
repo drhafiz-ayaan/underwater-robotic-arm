@@ -13,6 +13,9 @@ install(
     scripts/joint_sweep.py
     scripts/demo_sequence.py
     scripts/record_demo.py
+    scripts/pick_and_place.py
+    scripts/object_tf_publisher.py
+    scripts/kill_sim.sh
   DESTINATION lib/${PROJECT_NAME}
 )
 

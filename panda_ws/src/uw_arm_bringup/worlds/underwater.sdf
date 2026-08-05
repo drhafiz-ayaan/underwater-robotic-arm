@@ -280,14 +280,17 @@
       </link>
     </model>
 
-    <!-- Drop-off basket: the place target for Phase 2. -->
+    <!-- Drop-off basket. Placed on the +y side, NOT behind the intervention
+         panel: from the scene camera at (1.6, 1.3, 2.4) the panel occludes
+         anything at negative y beyond it, so the payload would be delivered out
+         of shot. Kept inside the arm's reach (0.49 m radius vs 0.73 m span). -->
     <model name="dropoff_basket">
       <static>true</static>
-      <pose>0.10 -0.62 0.10 0 0 0</pose>
+      <pose>0.35 0.25 0.25 0 0 0</pose>
       <link name="link">
-        <collision name="collision"><geometry><box><size>0.30 0.30 0.20</size></box></geometry></collision>
+        <collision name="collision"><geometry><box><size>0.30 0.30 0.50</size></box></geometry></collision>
         <visual name="visual">
-          <geometry><box><size>0.30 0.30 0.20</size></box></geometry>
+          <geometry><box><size>0.30 0.30 0.50</size></box></geometry>
           <material><diffuse>0.90 0.75 0.05 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
         </visual>
       </link>

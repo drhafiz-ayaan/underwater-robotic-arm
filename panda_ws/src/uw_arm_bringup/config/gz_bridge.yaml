@@ -35,10 +35,8 @@
   gz_type_name: "gz.msgs.Empty"
   direction: ROS_TO_GZ
 
-# Ground-truth object poses. Used ONLY to score the perception pipeline in
-# Phase 2 - the pick-and-place node must never subscribe to this.
-- ros_topic_name: "/gz/model_poses"
-  gz_topic_name: "/world/underwater/dynamic_pose/info"
-  ros_type_name: "geometry_msgs/msg/PoseArray"
-  gz_type_name: "gz.msgs.Pose_V"
-  direction: GZ_TO_ROS
+# NOTE: object poses are NOT bridged here. ros_gz_bridge's Pose_V -> TFMessage
+# conversion leaves frame_id and child_frame_id empty on Jazzy (for both
+# pose/info and dynamic_pose/info), and the PoseArray conversion drops names
+# outright, so neither can identify a specific object. object_tf_publisher.py
+# reads the named poses from gz directly and broadcasts real TF frames.

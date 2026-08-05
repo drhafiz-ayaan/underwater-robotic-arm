@@ -106,7 +106,9 @@ def generate_launch_description():
         arguments=[
             "-topic", "robot_description",
             "-name", "uw_arm",
-            "-x", "0.0", "-y", "0.0", "-z", "0.5",
+            # z=0: the pedestal height is carried by the URDF's world_to_base
+            # joint so TF and Gazebo agree. Do not add it here as well.
+            "-x", "0.0", "-y", "0.0", "-z", "0.0",
             "-allow_renaming", "false",
         ],
     )
@@ -138,6 +140,28 @@ def generate_launch_description():
                       "/wrist_camera/depth_image",
                       "/scene_camera/image")
     ]
+
+    # Gazebo publishes object poses on /gz/tf parented to the world name
+    # ("underwater"), while robot_state_publisher roots the robot at "world".
+    # Without this identity link the two TF trees are disconnected and no lookup
+    # between base_link and target_canister can succeed.
+    world_link = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        name="world_to_underwater",
+        output="log",
+        arguments=["--frame-id", "world", "--child-frame-id", "underwater"],
+        parameters=[{"use_sim_time": True}],
+    )
+
+
+    object_tf = Node(
+        package="uw_arm_bringup",
+        executable="object_tf_publisher.py",
+        output="log",
+        parameters=[{"world": "underwater", "parent_frame": "world",
+                     "use_sim_time": True}],
+    )
 
     def spawner(name):
         return Node(
@@ -182,6 +206,8 @@ def generate_launch_description():
         spawn_robot,
         bridge,
         *image_bridges,
+        world_link,
+        object_tf,
 
         RegisterEventHandler(
             OnProcessExit(target_action=spawn_robot, on_exit=[jsb])

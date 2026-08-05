@@ -45,7 +45,7 @@ class Recorder(Node):
         self.declare_parameter("output", os.path.expanduser("~/uw_arm_demo.mp4"))
         self.declare_parameter("fps", 30)
         self.declare_parameter("duration", 90.0)
-        self.declare_parameter("title", "Underwater 6-DOF Manipulator - Phase 1")
+        self.declare_parameter("title", "Underwater 6-DOF Manipulator - Pick and Place")
         self.declare_parameter("subtitle", "ROS 2 Jazzy | Gazebo Harmonic | Ifra Aerial Robotics")
 
         self.fps = int(self.get_parameter("fps").value)

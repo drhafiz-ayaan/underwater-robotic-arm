@@ -130,7 +130,17 @@
       <gazebo>
         <plugin filename="gz-sim-detachable-joint-system"
                 name="gz::sim::systems::DetachableJoint">
-          <parent_link>gripper_palm</parent_link>
+          <!-- link6, NOT gripper_palm. sdformat merges every link joined by a
+               FIXED joint into its parent, so tool0, gripper_palm and grasp_link
+               do not exist as links in the converted SDF - they are all folded
+               into link6. Naming gripper_palm here makes the plugin abort at
+               startup with
+                 [Err] [DetachableJoint.cc:62] Link with name [gripper_palm]
+                 not found in model [uw_arm]
+               and, because the failure is only a log line, /gripper/attach then
+               silently does nothing: the object is held by jaw friction alone
+               and drops or is left behind mid-transfer. -->
+          <parent_link>link6</parent_link>
           <child_model>${model}</child_model>
           <child_link>${link}</child_link>
           <attach_topic>/gripper/attach</attach_topic>

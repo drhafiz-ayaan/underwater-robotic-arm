@@ -65,7 +65,10 @@ def generate_launch_description():
 
     demo = Node(
         package="uw_arm_bringup",
-        executable="demo_sequence.py",
+        # pick_and_place.py, not demo_sequence.py: the latter only replays
+        # hand-picked joint angles and never approaches the object. This one
+        # solves IK from the target's measured TF pose and actually moves it.
+        executable="pick_and_place.py",
         output="screen",
         parameters=[{"use_sim_time": True}],
     )
