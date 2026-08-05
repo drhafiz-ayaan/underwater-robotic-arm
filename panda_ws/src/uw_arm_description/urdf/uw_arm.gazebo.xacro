@@ -1,0 +1,185 @@
+<?xml version="1.0"?>
+<!--
+  Gazebo Harmonic (gz-sim 8) integration: ros2_control bridge, hydrodynamics,
+  wrist RGB-D sensor, and the detachable-joint grasp mechanism.
+
+  WHY HYDRODYNAMICS BUT NOT BUOYANCY ON THE ARM
+  ====================
+  The SolidWorks parts were assigned a water-like density (~996 kg/m^3): summed
+  over all seven links the arm displaces 2.516 L for 2.506 kg of mass, i.e. it is
+  neutrally buoyant by construction with a net +0.72 N residual in seawater.
+  Since the base is rigidly anchored and every joint is position-controlled,
+  0.72 N spread over the chain is far below the controller's authority.
+
+  What actually dominates a submerged manipulator is added mass and quadratic
+  drag, which is what the Hydrodynamics system models. Buoyancy is applied at
+  the world level (see underwater.sdf) and matters for the free-floating cargo,
+  whose collisions are primitives and therefore give exact displaced volumes.
+  The arm links use STL collisions, from which gz cannot reliably derive volume.
+
+  To put the arm under full buoyancy too, replace its mesh collisions with
+  primitives and remove it from the world Buoyancy plugin's skip list.
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:macro name="uw_arm_gazebo" params="controllers_yaml:='' use_camera:=true">
+
+    <!-- ================================================================== -->
+    <!--  ros2_control                                                       -->
+    <!-- ================================================================== -->
+    <gazebo>
+      <plugin filename="gz_ros2_control-system"
+              name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+        <parameters>${controllers_yaml}</parameters>
+        <ros>
+          <namespace>/</namespace>
+        </ros>
+      </plugin>
+    </gazebo>
+
+    <!-- ================================================================== -->
+    <!--  HYDRODYNAMICS (Fossen model, one instance per moving link)         -->
+    <!--                                                                     -->
+    <!--  added_*  : added-mass coefficients                                  -->
+    <!--  drag_*   : quadratic drag, approx -0.5 * rho * Cd * A_frontal       -->
+    <!--  ang_drag : quadratic angular drag about each body axis              -->
+    <!--                                                                     -->
+    <!--  All coefficients are NEGATIVE by Fossen sign convention.            -->
+    <!--                                                                     -->
+    <!--  ADDED MASS IS CAPPED AT ~30% OF EACH LINK'S REAL MASS - DO NOT      -->
+    <!--  RAISE IT TO THE PHYSICAL VALUE. This system applies added mass      -->
+    <!--  EXPLICITLY, so once |added| approaches the body mass the effective  -->
+    <!--  mass matrix stops being positive-definite and the solver diverges   -->
+    <!--  within ~50 ms ("ODE INTERNAL ERROR 1: assertion aabbBound ...").    -->
+    <!--  These links are neutrally buoyant, so the true added mass IS about  -->
+    <!--  equal to the link mass - which is exactly the unstable case.        -->
+    <!--                                                                     -->
+    <!--  The exact fix is SDF's <fluid_added_mass>, which dartsim integrates -->
+    <!--  implicitly and is therefore unconditionally stable (the cargo in    -->
+    <!--  underwater.sdf uses it). URDF has no equivalent element, so the arm -->
+    <!--  cannot use it without being authored as SDF. The practical impact   -->
+    <!--  is small: the joints are stiffly position-controlled, so slightly   -->
+    <!--  under-modelled link inertia barely shows in tracking.               -->
+    <!--                                                                     -->
+    <!--  Tuning: if the arm feels syrupy, halve drag_*; if it overshoots on  -->
+    <!--  fast trajectories, raise drag_*. Leave added_* alone.               -->
+    <!-- ================================================================== -->
+    <xacro:macro name="link_hydro" params="link added drag ang_drag">
+      <gazebo>
+        <plugin filename="gz-sim-hydrodynamics-system"
+                name="gz::sim::systems::Hydrodynamics">
+          <link_name>${link}</link_name>
+          <!-- added mass -->
+          <xDotU>${added}</xDotU>
+          <yDotV>${added}</yDotV>
+          <zDotW>${added}</zDotW>
+          <!-- Also capped: link rotational inertias are ~1e-3, so -0.002 here
+               would be 2x the body value and diverges the same way. -->
+          <kDotP>-0.0003</kDotP>
+          <mDotQ>-0.0003</mDotQ>
+          <nDotR>-0.0003</nDotR>
+          <!-- linear (creeping-flow) drag: small, keeps low-speed motion stable -->
+          <xU>-0.5</xU>
+          <yV>-0.5</yV>
+          <zW>-0.5</zW>
+          <!-- quadratic drag: dominant term at manipulation speeds -->
+          <xUabsU>${drag}</xUabsU>
+          <yVabsV>${drag}</yVabsV>
+          <zWabsW>${drag}</zWabsW>
+          <!-- angular drag -->
+          <kP>-0.01</kP>          <mQ>-0.01</mQ>          <nR>-0.01</nR>
+          <kPabsP>${ang_drag}</kPabsP>
+          <mQabsQ>${ang_drag}</mQabsQ>
+          <nRabsR>${ang_drag}</nRabsR>
+        </plugin>
+      </gazebo>
+    </xacro:macro>
+
+    <!-- added = 30% of link mass (see stability note above); drag scaled by
+         each link's displaced volume (0.21-0.53 L).
+         link masses: 0.206 0.413 0.531 0.531 0.413 0.343 kg -->
+    <xacro:link_hydro link="link1" added="-0.06" drag="-2.5" ang_drag="-0.03"/>
+    <xacro:link_hydro link="link2" added="-0.12" drag="-4.5" ang_drag="-0.06"/>
+    <xacro:link_hydro link="link3" added="-0.16" drag="-6.0" ang_drag="-0.09"/>
+    <xacro:link_hydro link="link4" added="-0.16" drag="-6.0" ang_drag="-0.09"/>
+    <xacro:link_hydro link="link5" added="-0.12" drag="-4.5" ang_drag="-0.06"/>
+    <xacro:link_hydro link="link6" added="-0.10" drag="-3.5" ang_drag="-0.05"/>
+
+    <!-- ================================================================== -->
+    <!--  SURFACES                                                           -->
+    <!--  High friction on the jaws: wet, smooth objects are hard to hold and -->
+    <!--  the detachable joint below is what actually secures the grasp, but  -->
+    <!--  friction still governs the approach/contact phase.                  -->
+    <!-- ================================================================== -->
+    <gazebo reference="finger_left">
+      <mu1>1.6</mu1><mu2>1.6</mu2><kp>1e6</kp><kd>50.0</kd><minDepth>0.001</minDepth>
+    </gazebo>
+    <gazebo reference="finger_right">
+      <mu1>1.6</mu1><mu2>1.6</mu2><kp>1e6</kp><kd>50.0</kd><minDepth>0.001</minDepth>
+    </gazebo>
+
+    <!-- ================================================================== -->
+    <!--  GRASP MECHANISM                                                    -->
+    <!--  Friction alone will not hold a wet object through a full transfer   -->
+    <!--  in simulation. One DetachableJoint per graspable model, all created -->
+    <!--  detached; Phase 2 latches by publishing an empty message on         -->
+    <!--  /gripper/attach and releases on /gripper/detach.                    -->
+    <!--  Add a block here for every graspable model you put in the world.    -->
+    <!-- ================================================================== -->
+    <xacro:macro name="graspable" params="model link:=base_link">
+      <gazebo>
+        <plugin filename="gz-sim-detachable-joint-system"
+                name="gz::sim::systems::DetachableJoint">
+          <parent_link>gripper_palm</parent_link>
+          <child_model>${model}</child_model>
+          <child_link>${link}</child_link>
+          <attach_topic>/gripper/attach</attach_topic>
+          <detach_topic>/gripper/detach</detach_topic>
+          <output_topic>/gripper/attached</output_topic>
+          <suppress_initial_attach>true</suppress_initial_attach>
+        </plugin>
+      </gazebo>
+    </xacro:macro>
+
+    <xacro:graspable model="target_canister"/>
+
+    <!-- ================================================================== -->
+    <!--  WRIST RGB-D SENSOR                                                 -->
+    <!--  Narrow far-clip and heavy noise reflect real turbid-water optics:   -->
+    <!--  usable range is short and the depth return is poor. Phase 2's pose  -->
+    <!--  estimator has to cope with that rather than with a perfect sensor.  -->
+    <!-- ================================================================== -->
+    <xacro:if value="${use_camera}">
+      <gazebo reference="camera_link">
+        <sensor name="wrist_rgbd" type="rgbd_camera">
+          <topic>wrist_camera</topic>
+          <gz_frame_id>camera_optical_frame</gz_frame_id>
+          <update_rate>20</update_rate>
+          <always_on>true</always_on>
+          <visualize>true</visualize>
+          <camera>
+            <horizontal_fov>1.204</horizontal_fov>   <!-- 69 deg, RealSense-like -->
+            <image>
+              <width>640</width>
+              <height>480</height>
+              <format>R8G8B8</format>
+            </image>
+            <clip>
+              <near>0.05</near>
+              <far>4.0</far>
+            </clip>
+            <depth_camera>
+              <clip><near>0.10</near><far>3.0</far></clip>
+            </depth_camera>
+            <noise>
+              <type>gaussian</type>
+              <mean>0.0</mean>
+              <stddev>0.012</stddev>
+            </noise>
+          </camera>
+        </sensor>
+      </gazebo>
+    </xacro:if>
+
+  </xacro:macro>
+</robot>

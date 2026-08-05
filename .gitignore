@@ -1,0 +1,21 @@
+# colcon build artefacts - regenerate with `colcon build --symlink-install`
+panda_ws/build/
+panda_ws/install/
+panda_ws/log/
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Editor / OS noise
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Recorded video is published as a release asset, not committed:
+# a 13 MB binary per re-record bloats history quickly.
+# The checked-in copy under deliverable/ is the exception (see its README).
+*.mp4
+!deliverable/video/*.mp4
+.claude/

@@ -1,0 +1,406 @@
+<?xml version="1.0" ?>
+<!--
+  Underwater intervention scene for the Ifra Aerial Robotics manipulator.
+  Gazebo Harmonic (gz-sim 8).
+
+  LAYOUT (world Z is up, metres)
+    z = +8.00   water surface (graded-buoyancy transition to air)
+    z = +0.50   top of the manipulator pedestal - the arm base mounts here
+    z = +0.40   top of the intervention panel - graspable cargo sits here
+    z =  0.00   seabed
+
+  BUOYANCY POLICY
+    The Buoyancy system is restricted with <enable> to the free-floating models
+    only. The arm is excluded on purpose: its links use STL collisions, from
+    which gz cannot derive a reliable displaced volume, and it is neutrally
+    buoyant by construction anyway (2.516 L displaced vs 2.506 kg mass).
+    Fluid loading on the arm comes from the Hydrodynamics system instead.
+-->
+<sdf version="1.9">
+  <world name="underwater">
+
+    <physics name="1ms" type="ignored">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
+
+    <gravity>0 0 -9.81</gravity>
+
+    <plugin filename="gz-sim-physics-system"
+            name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-user-commands-system"
+            name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-scene-broadcaster-system"
+            name="gz::sim::systems::SceneBroadcaster"/>
+    <plugin filename="gz-sim-contact-system"
+            name="gz::sim::systems::Contact"/>
+
+    <!-- background_color is what the wrist camera sees at infinity. Without it
+         the RGB-D stream shows a bright sky, which destroys the perception
+         pipeline's colour segmentation in Phase 2. -->
+    <plugin filename="gz-sim-sensors-system"
+            name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+      <background_color>0.05 0.16 0.22</background_color>
+    </plugin>
+
+    <plugin filename="gz-sim-buoyancy-system"
+            name="gz::sim::systems::Buoyancy">
+      <graded_buoyancy>
+        <default_density>1025</default_density>   <!-- seawater -->
+        <density_change>
+          <above_depth>8.0</above_depth>
+          <density>1.225</density>                <!-- air above the surface -->
+        </density_change>
+      </graded_buoyancy>
+      <enable>target_canister</enable>
+      <enable>drift_float</enable>
+      <enable>neutral_pod</enable>
+    </plugin>
+
+    <!-- =============================== SCENE =========================== -->
+    <scene>
+      <ambient>0.18 0.28 0.32 1</ambient>
+      <background>0.05 0.16 0.22 1</background>
+      <grid>false</grid>
+      <!-- No <sky/>. It renders a bright horizon band across the top of every
+           camera, which destroys the submerged look and, more practically,
+           gives the Phase 2 segmenter a large bright region to trip over. -->
+    </scene>
+
+    <!-- Filtered downwelling sunlight: dim, cool, and heavily attenuated. -->
+    <light type="directional" name="downwelling">
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>0.35 0.48 0.52 1</diffuse>
+      <specular>0.10 0.14 0.16 1</specular>
+      <direction>0.2 0.25 -0.95</direction>
+      <cast_shadows>true</cast_shadows>
+      <attenuation>
+        <range>40</range>
+        <constant>0.6</constant>
+        <linear>0.05</linear>
+        <quadratic>0.002</quadratic>
+      </attenuation>
+    </light>
+
+    <!-- ROV work lights. cast_shadows is OFF on both: ogre2 supports a limited
+         number of shadow-casting lights, and with three of them the renderer
+         thrashes its shadow maps and emits several different images of the SAME
+         static scene - geometry present in one frame and gone in the next. Only
+         the directional light casts shadows. -->
+    <light type="spot" name="rov_light_port">
+      <pose>-0.4 0.6 2.2 0 0 0</pose>
+      <diffuse>0.9 0.92 0.85 1</diffuse>
+      <specular>0.4 0.4 0.4 1</specular>
+      <direction>0.35 -0.5 -1.0</direction>
+      <cast_shadows>false</cast_shadows>
+      <attenuation><range>12</range><constant>0.3</constant>
+        <linear>0.10</linear><quadratic>0.02</quadratic></attenuation>
+      <spot><inner_angle>0.5</inner_angle><outer_angle>1.0</outer_angle>
+        <falloff>1.2</falloff></spot>
+    </light>
+
+    <light type="spot" name="rov_light_stbd">
+      <pose>1.2 -1.0 2.2 0 0 0</pose>
+      <diffuse>0.85 0.90 0.88 1</diffuse>
+      <specular>0.3 0.3 0.3 1</specular>
+      <direction>-0.4 0.45 -1.0</direction>
+      <cast_shadows>false</cast_shadows>
+      <attenuation><range>12</range><constant>0.3</constant>
+        <linear>0.10</linear><quadratic>0.02</quadratic></attenuation>
+      <spot><inner_angle>0.5</inner_angle><outer_angle>1.0</outer_angle>
+        <falloff>1.2</falloff></spot>
+    </light>
+
+    <!-- =============================== SEABED ========================== -->
+    <!-- A thin box, NOT an infinite <plane>. A plane collision gives ODE (the
+         collision detector dartsim uses) an unbounded AABB and it aborts with
+         "assertion aabbBound >= dMinIntExact failed" as soon as the buoyant
+         bodies start moving. 30 m square keeps the seabed filling the frame out to the
+         horizon so no sky is ever visible, at a ~1.4 m sand-ripple wavelength. -->
+    <model name="seabed">
+      <static>true</static>
+      <pose>0 0 -0.1 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry><box><size>30 30 0.2</size></box></geometry>
+          <surface><friction><ode><mu>0.9</mu><mu2>0.9</mu2></ode></friction></surface>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>30 30 0.2</size></box></geometry>
+          <material>
+            <diffuse>0.75 0.70 0.58 1</diffuse>
+            <specular>0.05 0.05 0.05 1</specular>
+            <pbr>
+              <metal>
+                <albedo_map>package://uw_arm_bringup/materials/textures/seabed_sand.png</albedo_map>
+                <roughness>0.95</roughness>
+                <metalness>0.0</metalness>
+              </metal>
+            </pbr>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Scattered boulders: visual texture for the scene and, more usefully,
+         non-target clutter that the Phase 2 segmenter has to reject. -->
+    <model name="boulder_a">
+      <static>true</static>
+      <pose>-1.6 1.3 0.22 0.3 0.2 0.7</pose>
+      <link name="link">
+        <collision name="collision"><geometry><sphere><radius>0.32</radius></sphere></geometry></collision>
+        <visual name="visual">
+          <geometry><sphere><radius>0.32</radius></sphere></geometry>
+          <material><diffuse>0.28 0.30 0.27 1</diffuse><specular>0.02 0.02 0.02 1</specular></material>
+        </visual>
+      </link>
+    </model>
+
+    <model name="boulder_b">
+      <static>true</static>
+      <pose>1.9 1.7 0.16 0 0.4 1.2</pose>
+      <link name="link">
+        <collision name="collision"><geometry><box><size>0.55 0.42 0.33</size></box></geometry></collision>
+        <visual name="visual">
+          <geometry><box><size>0.55 0.42 0.33</size></box></geometry>
+          <material><diffuse>0.24 0.27 0.25 1</diffuse><specular>0.02 0.02 0.02 1</specular></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ========================= FIXED STRUCTURE ======================= -->
+    <!-- Manipulator pedestal. The arm's world_to_base fixed joint anchors it
+         here; spawn the robot at z = 0.5. -->
+    <model name="arm_pedestal">
+      <static>true</static>
+      <pose>0 0 0.25 0 0 0</pose>
+      <link name="link">
+        <collision name="collision"><geometry><box><size>0.30 0.30 0.50</size></box></geometry></collision>
+        <visual name="visual">
+          <geometry><box><size>0.30 0.30 0.50</size></box></geometry>
+          <material><diffuse>0.85 0.55 0.10 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Intervention panel: the work surface the cargo sits on. -->
+    <model name="intervention_panel">
+      <static>true</static>
+      <pose>0.45 -0.25 0.20 0 0 0</pose>
+      <link name="link">
+        <collision name="collision"><geometry><box><size>0.70 0.70 0.40</size></box></geometry></collision>
+        <visual name="visual">
+          <geometry><box><size>0.70 0.70 0.40</size></box></geometry>
+          <material><diffuse>0.18 0.22 0.26 1</diffuse><specular>0.15 0.15 0.15 1</specular></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- Drop-off basket: the place target for Phase 2. -->
+    <model name="dropoff_basket">
+      <static>true</static>
+      <pose>0.10 -0.62 0.10 0 0 0</pose>
+      <link name="link">
+        <collision name="collision"><geometry><box><size>0.30 0.30 0.20</size></box></geometry></collision>
+        <visual name="visual">
+          <geometry><box><size>0.30 0.30 0.20</size></box></geometry>
+          <material><diffuse>0.90 0.75 0.05 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ======================== GRASPABLE CARGO ======================== -->
+    <!-- SINKING. Density ~2000 kg/m^3: weight 8.48 N vs buoyancy 4.34 N, so it
+         stays put on the panel. This is the Phase 2 grasp target - the strong
+         orange is deliberate, it is what the colour segmenter keys on.
+         0.06 m across against a 0.094 m maximum jaw opening.
+
+         Box, not cylinder: the graded_buoyancy option only supports <box> and
+         <sphere> collisions ("Only <box> and <sphere> collisions are supported
+         by the graded buoyancy option", Buoyancy.cc:616). A cylinder here is
+         silently given zero buoyancy. -->
+    <model name="target_canister">
+      <pose>0.42 -0.28 0.46 0 0 0</pose>
+      <link name="base_link">
+        <inertial>
+          <mass>0.864</mass>
+          <inertia><ixx>1.296e-3</ixx><iyy>1.296e-3</iyy><izz>5.184e-4</izz>
+                   <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
+          <!-- Added mass belongs HERE, not in the Hydrodynamics plugin. dartsim
+               folds <fluid_added_mass> into the spatial inertia and solves it
+               implicitly, so it stays stable even when the added mass equals or
+               exceeds the body mass - which is the normal case underwater. The
+               plugin's xDotU/yDotV/... path is explicit and diverges there. -->
+          <fluid_added_mass>
+            <xx>0.44</xx><xy>0</xy><xz>0</xz><xp>0</xp><xq>0</xq><xr>0</xr>
+            <yy>0.44</yy><yz>0</yz><yp>0</yp><yq>0</yq><yr>0</yr>
+            <zz>0.25</zz><zp>0</zp><zq>0</zq><zr>0</zr>
+            <pp>2.0e-4</pp><pq>0</pq><pr>0</pr>
+            <qq>2.0e-4</qq><qr>0</qr>
+            <rr>1.0e-4</rr>
+          </fluid_added_mass>
+        </inertial>
+        <collision name="collision">
+          <geometry><box><size>0.06 0.06 0.12</size></box></geometry>
+          <surface><friction><ode><mu>1.2</mu><mu2>1.2</mu2></ode></friction></surface>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.06 0.06 0.12</size></box></geometry>
+          <material><diffuse>0.95 0.35 0.05 1</diffuse><specular>0.3 0.2 0.1 1</specular>
+                    <emissive>0.10 0.03 0.0 1</emissive></material>
+        </visual>
+      </link>
+      <plugin filename="gz-sim-hydrodynamics-system"
+              name="gz::sim::systems::Hydrodynamics">
+        <link_name>base_link</link_name>
+        <!-- Added-mass terms zeroed: handled by <fluid_added_mass> above. -->
+        <xDotU>0</xDotU><yDotV>0</yDotV><zDotW>0</zDotW>
+        <kDotP>0</kDotP><mDotQ>0</mDotQ><nDotR>0</nDotR>
+        <xU>-0.4</xU><yV>-0.4</yV><zW>-0.4</zW>
+        <xUabsU>-3.0</xUabsU><yVabsV>-3.0</yVabsV><zWabsW>-3.0</zWabsW>
+        <kPabsP>-0.03</kPabsP><mQabsQ>-0.03</mQabsQ><nRabsR>-0.03</nRabsR>
+      </plugin>
+    </model>
+
+    <!-- FLOATING. Density ~300 kg/m^3, so it rises and settles at the surface.
+         Watch it climb on startup - that is the graded buoyancy working. -->
+    <model name="drift_float">
+      <pose>-0.9 0.5 1.2 0 0 0</pose>
+      <link name="base_link">
+        <inertial>
+          <mass>0.271</mass>
+          <inertia><ixx>3.9e-4</ixx><iyy>3.9e-4</iyy><izz>3.9e-4</izz>
+                   <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
+          <!-- Sphere added mass = 0.5 * rho * V = 0.46 kg, i.e. 1.7x the body
+               mass. Only the implicit path can carry a ratio like this. -->
+          <fluid_added_mass>
+            <xx>0.46</xx><xy>0</xy><xz>0</xz><xp>0</xp><xq>0</xq><xr>0</xr>
+            <yy>0.46</yy><yz>0</yz><yp>0</yp><yq>0</yq><yr>0</yr>
+            <zz>0.46</zz><zp>0</zp><zq>0</zq><zr>0</zr>
+            <pp>1.0e-4</pp><pq>0</pq><pr>0</pr>
+            <qq>1.0e-4</qq><qr>0</qr>
+            <rr>1.0e-4</rr>
+          </fluid_added_mass>
+        </inertial>
+        <collision name="collision">
+          <geometry><sphere><radius>0.06</radius></sphere></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><sphere><radius>0.06</radius></sphere></geometry>
+          <material><diffuse>0.95 0.92 0.25 1</diffuse><specular>0.4 0.4 0.2 1</specular></material>
+        </visual>
+      </link>
+      <plugin filename="gz-sim-hydrodynamics-system"
+              name="gz::sim::systems::Hydrodynamics">
+        <link_name>base_link</link_name>
+        <!-- Added-mass terms zeroed: handled by <fluid_added_mass> above. -->
+        <xDotU>0</xDotU><yDotV>0</yDotV><zDotW>0</zDotW>
+        <kDotP>0</kDotP><mDotQ>0</mDotQ><nDotR>0</nDotR>
+        <xU>-0.6</xU><yV>-0.6</yV><zW>-0.6</zW>
+        <xUabsU>-5.8</xUabsU><yVabsV>-5.8</yVabsV><zWabsW>-5.8</zWabsW>
+        <kPabsP>-0.02</kPabsP><mQabsQ>-0.02</mQabsQ><nRabsR>-0.02</nRabsR>
+      </plugin>
+    </model>
+
+    <!-- NEUTRAL. Density matched to seawater, so it hovers where it is left and
+         drifts under any disturbance. This is the hard case for Phase 2: a
+         target whose pose genuinely changes while the arm is approaching. -->
+    <model name="neutral_pod">
+      <pose>0.30 0.35 0.80 0 0 0</pose>
+      <link name="base_link">
+        <inertial>
+          <mass>0.525</mass>
+          <inertia><ixx>5.6e-4</ixx><iyy>5.6e-4</iyy><izz>5.6e-4</izz>
+                   <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
+          <fluid_added_mass>
+            <xx>0.37</xx><xy>0</xy><xz>0</xz><xp>0</xp><xq>0</xq><xr>0</xr>
+            <yy>0.37</yy><yz>0</yz><yp>0</yp><yq>0</yq><yr>0</yr>
+            <zz>0.37</zz><zp>0</zp><zq>0</zq><zr>0</zr>
+            <pp>1.5e-4</pp><pq>0</pq><pr>0</pr>
+            <qq>1.5e-4</qq><qr>0</qr>
+            <rr>1.5e-4</rr>
+          </fluid_added_mass>
+        </inertial>
+        <collision name="collision">
+          <geometry><box><size>0.08 0.08 0.08</size></box></geometry>
+        </collision>
+        <visual name="visual">
+          <geometry><box><size>0.08 0.08 0.08</size></box></geometry>
+          <material><diffuse>0.20 0.85 0.55 1</diffuse><specular>0.3 0.3 0.3 1</specular></material>
+        </visual>
+      </link>
+      <plugin filename="gz-sim-hydrodynamics-system"
+              name="gz::sim::systems::Hydrodynamics">
+        <link_name>base_link</link_name>
+        <!-- Added-mass terms zeroed: handled by <fluid_added_mass> above. -->
+        <xDotU>0</xDotU><yDotV>0</yDotV><zDotW>0</zDotW>
+        <kDotP>0</kDotP><mDotQ>0</mDotQ><nDotR>0</nDotR>
+        <xU>-0.5</xU><yV>-0.5</yV><zW>-0.5</zW>
+        <xUabsU>-3.3</xUabsU><yVabsV>-3.3</yVabsV><zWabsW>-3.3</zWabsW>
+        <kPabsP>-0.02</kPabsP><mQabsQ>-0.02</mQabsQ><nRabsR>-0.02</nRabsR>
+      </plugin>
+    </model>
+
+    <!-- Underside of the water surface at z = 8, matching the graded-buoyancy
+         transition. Visual only - no collision, so drift_float still surfaces
+         through it. Without this, any camera angled upward (the wrist camera
+         does this constantly) renders the default sky and the shot stops
+         looking submerged. -->
+    <model name="water_surface">
+      <static>true</static>
+      <pose>0 0 8.0 0 0 0</pose>
+      <link name="link">
+        <visual name="visual">
+          <geometry><box><size>30 30 0.02</size></box></geometry>
+          <material>
+            <diffuse>0.06 0.20 0.26 1</diffuse>
+            <specular>0.10 0.16 0.18 1</specular>
+            <emissive>0.02 0.07 0.09 1</emissive>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- ====================== THIRD-PERSON CAMERA ====================== -->
+    <!-- Cinematic observer used by record_demo.py. Recording from a sensor
+         inside the sim beats screen-capturing the GUI: no window chrome, no
+         cursor, deterministic frame timing, and no ffmpeg needed.
+
+         always_on is false so it only renders while something is subscribed -
+         it costs nothing during normal Phase 2 work.
+
+         Pose solved so the arm's full working envelope AND the intervention
+         panel, target and drop-off basket all sit inside the frustum with the
+         widest point at 86% of the frame, AND so the top edge of the frame
+         still lands on the seabed (13.5 m out, inside its 15 m half-extent) -
+         otherwise the view runs past the seabed edge and shows sky, which ruins
+         the submerged look. Recompute if you move the panel or resize the
+         seabed. The camera looks along
+         its own +X, so rpy is (0, pitch, yaw). -->
+    <model name="scene_camera">
+      <static>true</static>
+      <pose>1.60 1.30 2.40 0 0.5992 -2.4281</pose>
+      <link name="link">
+        <sensor name="scene_cam" type="camera">
+          <!-- NOTE the explicit "/image" suffix. A plain <camera> sensor
+               publishes on <topic> verbatim, whereas an <rgbd_camera> appends
+               /image, /depth_image, /points. Writing just "scene_camera" here
+               makes gz publish on /scene_camera while the bridge listens on
+               /scene_camera/image, and no frames ever arrive. -->
+          <topic>scene_camera/image</topic>
+          <update_rate>30</update_rate>
+          <!-- always_on so rendering does not depend on the lazy
+               ROS-subscriber -> bridge -> gz-subscriber chain resolving. -->
+          <always_on>true</always_on>
+          <camera>
+            <horizontal_fov>1.35</horizontal_fov>
+            <image><width>1280</width><height>720</height><format>R8G8B8</format></image>
+            <clip><near>0.05</near><far>60.0</far></clip>
+          </camera>
+        </sensor>
+      </link>
+    </model>
+
+  </world>
+</sdf>

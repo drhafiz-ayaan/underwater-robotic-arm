@@ -1,0 +1,98 @@
+<?xml version="1.0"?>
+<!--
+  Parametric parallel-jaw gripper.
+
+  The source CAD has no articulated end effector - link6 is a single fused mesh
+  that includes the SolidWorks component "gripper_Link-1". This file supplies a
+  minimal 1-DOF jaw so that MoveIt has a real end-effector group and a grasp
+  posture to command. Replace the <geometry> blocks with your CAD when you have
+  it; nothing outside this file needs to change.
+
+  Frame convention: parent (tool0) has +Z along the approach direction.
+  Jaws translate along +/-Y. finger_right mimics finger_left.
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:macro name="uw_gripper" params="parent">
+
+    <xacro:property name="palm_len"    value="0.030"/>
+    <xacro:property name="finger_len"  value="0.060"/>
+    <xacro:property name="half_gap"    value="0.012"/>  <!-- jaw inset at q=0 -->
+    <xacro:property name="stroke"      value="0.035"/>  <!-- per-jaw travel   -->
+
+    <material name="gripper_dark"><color rgba="0.25 0.27 0.30 1"/></material>
+
+    <!-- Palm -->
+    <link name="gripper_palm">
+      <inertial>
+        <origin xyz="0 0 ${palm_len/2}"/>
+        <mass value="0.150"/>
+        <inertia ixx="1.0e-4" ixy="0" ixz="0" iyy="1.0e-4" iyz="0" izz="1.2e-4"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 ${palm_len/2}"/>
+        <geometry><box size="0.060 0.080 ${palm_len}"/></geometry>
+        <material name="gripper_dark"/>
+      </visual>
+      <collision>
+        <origin xyz="0 0 ${palm_len/2}"/>
+        <geometry><box size="0.060 0.080 ${palm_len}"/></geometry>
+      </collision>
+    </link>
+    <joint name="tool0_to_palm" type="fixed">
+      <parent link="${parent}"/><child link="gripper_palm"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+    </joint>
+
+    <!-- Jaw macro: reflect = +1 (left) / -1 (right) -->
+    <xacro:macro name="jaw" params="name reflect">
+      <link name="${name}">
+        <inertial>
+          <origin xyz="0 0 ${finger_len/2}"/>
+          <mass value="0.030"/>
+          <inertia ixx="1.5e-5" ixy="0" ixz="0" iyy="1.5e-5" iyz="0" izz="4.0e-6"/>
+        </inertial>
+        <visual>
+          <origin xyz="0 0 ${finger_len/2}"/>
+          <geometry><box size="0.024 0.012 ${finger_len}"/></geometry>
+          <material name="gripper_dark"/>
+        </visual>
+        <collision>
+          <origin xyz="0 0 ${finger_len/2}"/>
+          <geometry><box size="0.024 0.012 ${finger_len}"/></geometry>
+        </collision>
+      </link>
+    </xacro:macro>
+
+    <xacro:jaw name="finger_left"  reflect="1"/>
+    <xacro:jaw name="finger_right" reflect="-1"/>
+
+    <joint name="finger_left_joint" type="prismatic">
+      <parent link="gripper_palm"/><child link="finger_left"/>
+      <origin xyz="0 ${half_gap} ${palm_len}" rpy="0 0 0"/>
+      <axis xyz="0 1 0"/>
+      <limit lower="0.0" upper="${stroke}" effort="60" velocity="0.1"/>
+      <dynamics damping="2.0" friction="0.5"/>
+    </joint>
+
+    <!-- Passive follower. ros2_control (Jazzy) reads this <mimic> tag directly,
+         so finger_right must NOT appear in the <ros2_control> block. -->
+    <joint name="finger_right_joint" type="prismatic">
+      <parent link="gripper_palm"/><child link="finger_right"/>
+      <origin xyz="0 ${-half_gap} ${palm_len}" rpy="0 0 0"/>
+      <axis xyz="0 -1 0"/>
+      <limit lower="0.0" upper="${stroke}" effort="60" velocity="0.1"/>
+      <dynamics damping="2.0" friction="0.5"/>
+      <mimic joint="finger_left_joint" multiplier="1.0" offset="0.0"/>
+    </joint>
+
+    <!-- Grasp target frame: mid-way up the jaws, on the approach axis.
+         Phase 2 plans grasps to THIS frame, not to tool0. -->
+    <link name="grasp_link"/>
+    <joint name="palm_to_grasp" type="fixed">
+      <parent link="gripper_palm"/><child link="grasp_link"/>
+      <origin xyz="0 0 ${palm_len + finger_len*0.75}" rpy="0 0 0"/>
+    </joint>
+
+  </xacro:macro>
+</robot>

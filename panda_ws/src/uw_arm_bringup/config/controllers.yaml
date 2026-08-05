@@ -1,0 +1,74 @@
+# ros2_control configuration for the underwater manipulator.
+#
+# update_rate is deliberately high (200 Hz). Underwater the added-mass term makes
+# the effective inertia of each link roughly double, and a slow control loop
+# interacts badly with the drag terms in the Hydrodynamics system.
+
+controller_manager:
+  ros__parameters:
+    update_rate: 200
+    use_sim_time: true
+
+    joint_state_broadcaster:
+      type: joint_state_broadcaster/JointStateBroadcaster
+
+    arm_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+
+    gripper_controller:
+      type: position_controllers/GripperActionController
+
+
+joint_state_broadcaster:
+  ros__parameters:
+    use_sim_time: true
+    # finger_right_joint is a mimic joint; ros2_control publishes it
+    # automatically, so it is not listed here.
+
+
+arm_controller:
+  ros__parameters:
+    use_sim_time: true
+    joints:
+      - joint1
+      - joint2
+      - joint3
+      - joint4
+      - joint5
+      - joint6
+    command_interfaces:
+      - position
+    state_interfaces:
+      - position
+      - velocity
+
+    state_publish_rate: 100.0
+    action_monitor_rate: 20.0
+    allow_partial_joints_goal: false
+    open_loop_control: false
+
+    # Tolerances are looser than a dry industrial arm would use. Drag and added
+    # mass introduce lag that a tight goal_time constraint would flag as a
+    # failure even when the trajectory is tracked acceptably.
+    constraints:
+      stopped_velocity_tolerance: 0.05
+      goal_time: 2.0
+      joint1: {trajectory: 0.30, goal: 0.05}
+      joint2: {trajectory: 0.30, goal: 0.05}
+      joint3: {trajectory: 0.30, goal: 0.05}
+      joint4: {trajectory: 0.30, goal: 0.05}
+      joint5: {trajectory: 0.30, goal: 0.05}
+      joint6: {trajectory: 0.30, goal: 0.05}
+
+
+gripper_controller:
+  ros__parameters:
+    use_sim_time: true
+    joint: finger_left_joint
+    # Stalling is the normal outcome of a successful grasp: the jaws stop on the
+    # object before reaching the commanded position.
+    allow_stalling: true
+    max_effort: 50.0
+    goal_tolerance: 0.005
+    stall_velocity_threshold: 0.001
+    stall_timeout: 1.0

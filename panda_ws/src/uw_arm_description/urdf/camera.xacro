@@ -1,0 +1,50 @@
+<?xml version="1.0"?>
+<!--
+  Wrist-mounted RGB-D camera (eye-in-hand).
+
+  Eye-in-hand rather than a fixed world camera: Phase 2 servos the gripper from
+  live TF, and a wrist camera keeps the target in view as the arm closes in,
+  which is what makes the "adjust based only on camera feedback" requirement
+  tractable in turbid water where standoff range is short.
+
+  Frames:
+    camera_link         - Gazebo/ROS body convention, +X along the optical axis
+                          (aligned with tool0 +Z, i.e. the approach direction)
+    camera_optical_frame- REP-103 optical convention, +Z forward, +X right
+                          This is the frame image geometry is expressed in.
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:macro name="wrist_camera" params="parent">
+
+    <xacro:property name="cam_back"  value="-0.055"/>  <!-- behind tool0 along Z -->
+    <xacro:property name="cam_side"  value="0.055"/>   <!-- offset off the axis  -->
+
+    <link name="camera_link">
+      <inertial>
+        <mass value="0.05"/>
+        <inertia ixx="1e-5" ixy="0" ixz="0" iyy="1e-5" iyz="0" izz="1e-5"/>
+      </inertial>
+      <visual>
+        <geometry><box size="0.030 0.050 0.030"/></geometry>
+        <material name="cam_black"><color rgba="0.1 0.1 0.12 1"/></material>
+      </visual>
+      <collision>
+        <geometry><box size="0.030 0.050 0.030"/></geometry>
+      </collision>
+    </link>
+
+    <!-- rpy (0, -pi/2, 0) maps camera_link +X onto parent +Z -->
+    <joint name="tool0_to_camera" type="fixed">
+      <parent link="${parent}"/><child link="camera_link"/>
+      <origin xyz="${cam_side} 0 ${cam_back}" rpy="0 ${-pi/2} 0"/>
+    </joint>
+
+    <link name="camera_optical_frame"/>
+    <joint name="camera_optical_joint" type="fixed">
+      <parent link="camera_link"/><child link="camera_optical_frame"/>
+      <origin xyz="0 0 0" rpy="${-pi/2} 0 ${-pi/2}"/>
+    </joint>
+
+  </xacro:macro>
+</robot>

@@ -1,0 +1,395 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com) 
+     Commit Version: 1.6.0-4-g7f85cfe  Build Version: 1.6.7995.38578
+     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
+<robot
+  name="arm water.urdf">
+  <link
+    name="base_link">
+    <inertial>
+      <origin
+        xyz="5.2042E-18 -8.6736E-18 0.03379"
+        rpy="0 0 0" />
+      <mass
+        value="0.070028" />
+      <inertia
+        ixx="9.8396E-05"
+        ixy="-8.1426E-21"
+        ixz="4.5244E-21"
+        iyy="9.8396E-05"
+        iyz="7.8582E-21"
+        izz="0.00014834" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://arm water.urdf/meshes/base_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.79216 0.81961 0.93333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://arm water.urdf/meshes/base_link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <link
+    name="1">
+    <inertial>
+      <origin
+        xyz="-0.00056391 -0.0013587 0.14089"
+        rpy="0 0 0" />
+      <mass
+        value="0.20637" />
+      <inertia
+        ixx="0.00074532"
+        ixy="-2.8774E-06"
+        ixz="5.8402E-07"
+        iyy="0.00073962"
+        iyz="1.4393E-06"
+        izz="0.00050704" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://arm water.urdf/meshes/1.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.79216 0.81961 0.93333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://arm water.urdf/meshes/1.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="1"
+    type="revolute">
+    <origin
+      xyz="0 0 0"
+      rpy="0 0 0" />
+    <parent
+      link="base_link" />
+    <child
+      link="1" />
+    <axis
+      xyz="0 0 -1" />
+    <limit
+      lower="0"
+      upper="3.142"
+      effort="300"
+      velocity="3" />
+  </joint>
+  <link
+    name="2">
+    <inertial>
+      <origin
+        xyz="-0.029715 -0.072313 0.14407"
+        rpy="0 0 0" />
+      <mass
+        value="0.41274" />
+      <inertia
+        ixx="0.0014551"
+        ixy="-8.6563E-05"
+        ixz="-2.2294E-06"
+        iyy="0.0012812"
+        iyz="4.0496E-06"
+        izz="0.0012477" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://arm water.urdf/meshes/2.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.79216 0.81961 0.93333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://arm water.urdf/meshes/2.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="2"
+    type="revolute">
+    <origin
+      xyz="0 0 0"
+      rpy="0 0 0" />
+    <parent
+      link="1" />
+    <child
+      link="2" />
+    <axis
+      xyz="-0.38463 -0.92307 0" />
+    <limit
+      lower="-1.57"
+      upper="1.57"
+      effort="200"
+      velocity="3" />
+  </joint>
+  <link
+    name="3">
+    <inertial>
+      <origin
+        xyz="0.01153 -0.17599 0.27428"
+        rpy="0 0 0" />
+      <mass
+        value="0.53072" />
+      <inertia
+        ixx="0.0038359"
+        ixy="0.00023811"
+        ixz="-0.0013729"
+        iyy="0.0043059"
+        iyz="0.00057351"
+        izz="0.0022084" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://arm water.urdf/meshes/3.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.79216 0.81961 0.93333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://arm water.urdf/meshes/3.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="3"
+    type="revolute">
+    <origin
+      xyz="0 0 0"
+      rpy="0 0 0" />
+    <parent
+      link="2" />
+    <child
+      link="3" />
+    <axis
+      xyz="0.48107 -0.20046 0.85346" />
+    <limit
+      lower="0"
+      upper="3.142"
+      effort="200"
+      velocity="3" />
+  </joint>
+  <link
+    name="4">
+    <inertial>
+      <origin
+        xyz="0.103233469951308 -0.21440168973006 0.435476493492701"
+        rpy="0 0 0" />
+      <mass
+        value="0.53071906421811" />
+      <inertia
+        ixx="0.00375821068139204"
+        ixy="0.000208409365871026"
+        ixz="-0.00133800632960672"
+        iyy="0.0043947227464167"
+        iyz="0.000608175220342841"
+        izz="0.0021972959682289" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://arm water.urdf/meshes/4.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://arm water.urdf/meshes/4.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="4"
+    type="revolute">
+    <origin
+      xyz="0 0 0"
+      rpy="0 0 0" />
+    <parent
+      link="3" />
+    <child
+      link="4" />
+    <axis
+      xyz="-0.48107 0.20046 -0.85346" />
+    <limit
+      lower="0"
+      upper="3.142"
+      effort="200"
+      velocity="3" />
+  </joint>
+  <link
+    name="5">
+    <inertial>
+      <origin
+        xyz="0.229189498333158 -0.187594455411763 0.54768842312625"
+        rpy="0 0 0" />
+      <mass
+        value="0.412741891204247" />
+      <inertia
+        ixx="0.00136660499708531"
+        ixy="-9.65624292835763E-05"
+        ixz="7.1715017121472E-05"
+        iyy="0.00132108047045762"
+        iyz="-5.79691892391754E-05"
+        izz="0.00129629560996313" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://arm water.urdf/meshes/5.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://arm water.urdf/meshes/5.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="5"
+    type="revolute">
+    <origin
+      xyz="0 0 0"
+      rpy="0 0 0" />
+    <parent
+      link="4" />
+    <child
+      link="5" />
+    <axis
+      xyz="0.68254 0.6966 -0.22111" />
+    <limit
+      lower="-1.57"
+      upper="1.57"
+      effort="200"
+      velocity="3" />
+  </joint>
+  <link
+    name="6">
+    <inertial>
+      <origin
+        xyz="0.270010003946201 -0.104048116855138 0.58732816554681"
+        rpy="0 0 0" />
+      <mass
+        value="0.342774814684392" />
+      <inertia
+        ixx="0.00107934672092979"
+        ixy="2.21346922582435E-05"
+        ixz="4.96200535276237E-05"
+        iyy="0.00102479357226296"
+        iyz="-0.000119475761283434"
+        izz="0.00086827186142368" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://arm water.urdf/meshes/6.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://arm water.urdf/meshes/6.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="6"
+    type="revolute">
+    <origin
+      xyz="0 0 0"
+      rpy="0 0 0" />
+    <parent
+      link="5" />
+    <child
+      link="6" />
+    <axis
+      xyz="-0.18988 0.46117 0.86676" />
+    <limit
+      lower="0"
+      upper="3.14"
+      effort="200"
+      velocity="3" />
+  </joint>
+</robot>

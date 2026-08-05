@@ -1,0 +1,57 @@
+<?xml version="1.0"?>
+<!--
+  ros2_control hardware description.
+
+  Position command interface throughout. Underwater, an effort interface would
+  be more faithful, but the fluid added-mass and drag terms (applied by the
+  Gazebo Hydrodynamics system) make effort-space gains very sensitive; position
+  control lets joint_trajectory_controller do the work and keeps Phase 2 focused
+  on perception rather than on tuning a submerged torque loop.
+
+  finger_right_joint is deliberately absent - it is a URDF <mimic> joint and
+  ros2_control resolves it automatically on Jazzy.
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:macro name="uw_arm_ros2_control" params="use_gripper:=true">
+
+    <ros2_control name="UwArmSystem" type="system">
+
+      <hardware>
+        <plugin>gz_ros2_control/GazeboSimSystem</plugin>
+      </hardware>
+
+      <xacro:macro name="arm_ji" params="name init:=0.0">
+        <joint name="${name}">
+          <command_interface name="position"/>
+          <state_interface name="position"><param name="initial_value">${init}</param></state_interface>
+          <state_interface name="velocity"/>
+          <state_interface name="effort"/>
+        </joint>
+      </xacro:macro>
+
+      <!-- Initial values must lie inside each joint's limits, otherwise the
+           controller manager rejects the configuration at startup. -->
+      <xacro:arm_ji name="joint1" init="1.5708"/>
+      <xacro:arm_ji name="joint2" init="0.0"/>
+      <xacro:arm_ji name="joint3" init="1.5708"/>
+      <xacro:arm_ji name="joint4" init="1.5708"/>
+      <xacro:arm_ji name="joint5" init="0.0"/>
+      <xacro:arm_ji name="joint6" init="1.5708"/>
+
+      <xacro:if value="${use_gripper}">
+        <joint name="finger_left_joint">
+          <command_interface name="position">
+            <param name="min">0.0</param>
+            <param name="max">0.035</param>
+          </command_interface>
+          <state_interface name="position"><param name="initial_value">0.035</param></state_interface>
+          <state_interface name="velocity"/>
+          <state_interface name="effort"/>
+        </joint>
+      </xacro:if>
+
+    </ros2_control>
+
+  </xacro:macro>
+</robot>

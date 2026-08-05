@@ -1,0 +1,44 @@
+# ros_gz_bridge topic map.
+#
+# The RGB image is NOT bridged here - ros_gz_image is used for it instead, since
+# it republishes as image_transport and avoids a full uncompressed copy through
+# the generic bridge at 20 Hz.
+
+- ros_topic_name: "/clock"
+  gz_topic_name: "/clock"
+  ros_type_name: "rosgraph_msgs/msg/Clock"
+  gz_type_name: "gz.msgs.Clock"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/wrist_camera/camera_info"
+  gz_topic_name: "/wrist_camera/camera_info"
+  ros_type_name: "sensor_msgs/msg/CameraInfo"
+  gz_type_name: "gz.msgs.CameraInfo"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/wrist_camera/points"
+  gz_topic_name: "/wrist_camera/points"
+  ros_type_name: "sensor_msgs/msg/PointCloud2"
+  gz_type_name: "gz.msgs.PointCloudPacked"
+  direction: GZ_TO_ROS
+
+# Grasp latch/release. Phase 2 publishes std_msgs/Empty on these.
+- ros_topic_name: "/gripper/attach"
+  gz_topic_name: "/gripper/attach"
+  ros_type_name: "std_msgs/msg/Empty"
+  gz_type_name: "gz.msgs.Empty"
+  direction: ROS_TO_GZ
+
+- ros_topic_name: "/gripper/detach"
+  gz_topic_name: "/gripper/detach"
+  ros_type_name: "std_msgs/msg/Empty"
+  gz_type_name: "gz.msgs.Empty"
+  direction: ROS_TO_GZ
+
+# Ground-truth object poses. Used ONLY to score the perception pipeline in
+# Phase 2 - the pick-and-place node must never subscribe to this.
+- ros_topic_name: "/gz/model_poses"
+  gz_topic_name: "/world/underwater/dynamic_pose/info"
+  ros_type_name: "geometry_msgs/msg/PoseArray"
+  gz_type_name: "gz.msgs.Pose_V"
+  direction: GZ_TO_ROS

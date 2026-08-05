@@ -1,0 +1,223 @@
+<?xml version="1.0"?>
+<!--
+  Underwater 5+1 DOF manipulator - corrected kinematic description.
+
+  ORIGIN OF THIS FILE
+  ====================
+  Rebuilt from "arm water.urdf" (SolidWorks to URDF Exporter 1.6.0, 2026-08-03).
+  The original export had <origin xyz="0 0 0"/> on EVERY joint because a single
+  SolidWorks reference frame ("Coordinate System2") was assigned to all seven
+  links instead of one coordinate system per joint. All link frames therefore
+  collapsed onto the world origin and every joint rotated about a line through
+  the base. Joint AXIS DIRECTIONS in the original export are correct (they came
+  from distinct SW axes Axis9..Axis14); only the axis LOCATIONS were lost.
+
+  RECOVERY
+  ====================
+  A revolute joint is fully defined by its axis direction plus ANY point on the
+  axis line. The six points below were estimated from the region where each pair
+  of consecutive STL meshes physically interpenetrate, expressed in the original
+  SolidWorks export frame (which coincides with base_link).
+
+  ==> THIS IS THE ONLY BLOCK YOU NEED TO EDIT after a clean SolidWorks re-export.
+      Everything downstream (joint origins, mesh offsets, inertial offsets) is
+      derived from it arithmetically.
+-->
+<robot name="uw_arm" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <xacro:arg name="use_gazebo"     default="true"/>
+  <xacro:arg name="use_camera"     default="true"/>
+  <xacro:arg name="use_gripper"    default="true"/>
+  <xacro:arg name="controllers_yaml" default=""/>
+
+  <!-- ==================================================================== -->
+  <!--  RECOVERED JOINT AXIS POINTS (metres, in the CAD export frame)        -->
+  <!--  Accuracy: a few mm. Replace with exact values after re-export.       -->
+  <!-- ==================================================================== -->
+  <xacro:property name="p1x" value="-0.0009"/>
+  <xacro:property name="p1y" value="-0.0019"/>
+  <xacro:property name="p1z" value=" 0.0560"/>
+
+  <xacro:property name="p2x" value="-0.0088"/>
+  <xacro:property name="p2y" value="-0.0211"/>
+  <xacro:property name="p2z" value=" 0.1634"/>
+
+  <xacro:property name="p3x" value="-0.0480"/>
+  <xacro:property name="p3y" value="-0.1662"/>
+  <xacro:property name="p3z" value=" 0.1764"/>
+
+  <xacro:property name="p4x" value=" 0.0674"/>
+  <xacro:property name="p4y" value="-0.1998"/>
+  <xacro:property name="p4z" value=" 0.3735"/>
+
+  <xacro:property name="p5x" value=" 0.1815"/>
+  <xacro:property name="p5y" value="-0.2277"/>
+  <xacro:property name="p5z" value=" 0.5423"/>
+
+  <xacro:property name="p6x" value=" 0.2747"/>
+  <xacro:property name="p6y" value="-0.1480"/>
+  <xacro:property name="p6z" value=" 0.5264"/>
+
+  <!-- Joint axis directions - EXACT, taken verbatim from the SW export -->
+  <xacro:property name="a1" value="0 0 -1"/>
+  <xacro:property name="a2" value="-0.38463 -0.92307 0"/>
+  <xacro:property name="a3" value="0.48107 -0.20046 0.85346"/>
+  <xacro:property name="a4" value="-0.48107 0.20046 -0.85346"/>
+  <xacro:property name="a5" value="0.68254 0.6966 -0.22111"/>
+  <xacro:property name="a6" value="-0.18988 0.46117 0.86676"/>
+
+  <!-- Distance from joint-6 axis point to the gripper mount, along axis 6.
+       Estimated from the link6 mesh extent; tune if the gripper floats. -->
+  <xacro:property name="tool_offset" value="0.21"/>
+
+  <!-- Joint dynamics. Underwater manipulators are heavily damped; these values
+       represent seal/gearbox friction only. Fluid drag is applied separately by
+       the Gazebo Hydrodynamics system (see uw_arm.gazebo.xacro). -->
+  <xacro:property name="jt_damping"  value="0.5"/>
+  <xacro:property name="jt_friction" value="0.1"/>
+
+  <xacro:property name="mesh_pkg" value="package://uw_arm_description/meshes"/>
+  <material name="arm_grey"><color rgba="0.79216 0.81961 0.93333 1"/></material>
+
+  <!-- ==================================================================== -->
+  <!--  LINK MACRO                                                           -->
+  <!--  The STL meshes are authored in the CAD export frame, so each link's   -->
+  <!--  visual/collision must be shifted by -p_i to sit correctly in its own  -->
+  <!--  (now non-degenerate) link frame. Same for the inertial origin.        -->
+  <!-- ==================================================================== -->
+  <xacro:macro name="arm_link"
+               params="name mesh ox:=0 oy:=0 oz:=0 mass cx:=0 cy:=0 cz:=0
+                       ixx ixy ixz iyy iyz izz">
+    <link name="${name}">
+      <inertial>
+        <origin xyz="${cx - ox} ${cy - oy} ${cz - oz}" rpy="0 0 0"/>
+        <mass value="${mass}"/>
+        <inertia ixx="${ixx}" ixy="${ixy}" ixz="${ixz}"
+                 iyy="${iyy}" iyz="${iyz}" izz="${izz}"/>
+      </inertial>
+      <visual>
+        <origin xyz="${-ox} ${-oy} ${-oz}" rpy="0 0 0"/>
+        <geometry><mesh filename="${mesh_pkg}/${mesh}"/></geometry>
+        <material name="arm_grey"/>
+      </visual>
+      <collision>
+        <origin xyz="${-ox} ${-oy} ${-oz}" rpy="0 0 0"/>
+        <geometry><mesh filename="${mesh_pkg}/${mesh}"/></geometry>
+      </collision>
+    </link>
+  </xacro:macro>
+
+  <xacro:macro name="arm_joint"
+               params="name parent child axis px py pz lower upper effort vel">
+    <joint name="${name}" type="revolute">
+      <origin xyz="${px} ${py} ${pz}" rpy="0 0 0"/>
+      <parent link="${parent}"/>
+      <child  link="${child}"/>
+      <axis xyz="${axis}"/>
+      <limit lower="${lower}" upper="${upper}" effort="${effort}" velocity="${vel}"/>
+      <dynamics damping="${jt_damping}" friction="${jt_friction}"/>
+    </joint>
+  </xacro:macro>
+
+  <!-- ==================================================================== -->
+  <!--  WORLD ANCHOR                                                         -->
+  <!--  The manipulator is bolted to a subsea pedestal. gz_ros2_control needs -->
+  <!--  a non-static model, so anchor via a fixed joint rather than <static>. -->
+  <!-- ==================================================================== -->
+  <link name="world"/>
+  <joint name="world_to_base" type="fixed">
+    <parent link="world"/><child link="base_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- ==================================================================== -->
+  <!--  KINEMATIC CHAIN                                                      -->
+  <!-- ==================================================================== -->
+  <xacro:arm_link name="base_link" mesh="base_link.STL" ox="0" oy="0" oz="0"
+    mass="0.070028" cx="0" cy="0" cz="0.03379"
+    ixx="9.8396E-05" ixy="-8.1426E-21" ixz="4.5244E-21"
+    iyy="9.8396E-05" iyz="7.8582E-21"  izz="0.00014834"/>
+
+  <xacro:arm_link name="link1" mesh="link1.STL" ox="${p1x}" oy="${p1y}" oz="${p1z}"
+    mass="0.20637" cx="-0.00056391" cy="-0.0013587" cz="0.14089"
+    ixx="0.00074532" ixy="-2.8774E-06" ixz="5.8402E-07"
+    iyy="0.00073962" iyz="1.4393E-06"  izz="0.00050704"/>
+  <xacro:arm_joint name="joint1" parent="base_link" child="link1" axis="${a1}"
+    px="${p1x}" py="${p1y}" pz="${p1z}" lower="0" upper="3.142" effort="300" vel="3"/>
+
+  <xacro:arm_link name="link2" mesh="link2.STL" ox="${p2x}" oy="${p2y}" oz="${p2z}"
+    mass="0.41274" cx="-0.029715" cy="-0.072313" cz="0.14407"
+    ixx="0.0014551" ixy="-8.6563E-05" ixz="-2.2294E-06"
+    iyy="0.0012812" iyz="4.0496E-06"  izz="0.0012477"/>
+  <xacro:arm_joint name="joint2" parent="link1" child="link2" axis="${a2}"
+    px="${p2x - p1x}" py="${p2y - p1y}" pz="${p2z - p1z}"
+    lower="-1.57" upper="1.57" effort="200" vel="3"/>
+
+  <xacro:arm_link name="link3" mesh="link3.STL" ox="${p3x}" oy="${p3y}" oz="${p3z}"
+    mass="0.53072" cx="0.01153" cy="-0.17599" cz="0.27428"
+    ixx="0.0038359" ixy="0.00023811" ixz="-0.0013729"
+    iyy="0.0043059" iyz="0.00057351" izz="0.0022084"/>
+  <xacro:arm_joint name="joint3" parent="link2" child="link3" axis="${a3}"
+    px="${p3x - p2x}" py="${p3y - p2y}" pz="${p3z - p2z}"
+    lower="0" upper="3.142" effort="200" vel="3"/>
+
+  <xacro:arm_link name="link4" mesh="link4.STL" ox="${p4x}" oy="${p4y}" oz="${p4z}"
+    mass="0.53071906" cx="0.10323347" cy="-0.21440169" cz="0.43547649"
+    ixx="0.00375821" ixy="0.00020841" ixz="-0.00133801"
+    iyy="0.00439472" iyz="0.00060818" izz="0.00219730"/>
+  <xacro:arm_joint name="joint4" parent="link3" child="link4" axis="${a4}"
+    px="${p4x - p3x}" py="${p4y - p3y}" pz="${p4z - p3z}"
+    lower="0" upper="3.142" effort="200" vel="3"/>
+
+  <xacro:arm_link name="link5" mesh="link5.STL" ox="${p5x}" oy="${p5y}" oz="${p5z}"
+    mass="0.41274189" cx="0.22918950" cy="-0.18759446" cz="0.54768842"
+    ixx="0.00136660" ixy="-9.65624E-05" ixz="7.17150E-05"
+    iyy="0.00132108" iyz="-5.79692E-05" izz="0.00129630"/>
+  <xacro:arm_joint name="joint5" parent="link4" child="link5" axis="${a5}"
+    px="${p5x - p4x}" py="${p5y - p4y}" pz="${p5z - p4z}"
+    lower="-1.57" upper="1.57" effort="200" vel="3"/>
+
+  <xacro:arm_link name="link6" mesh="link6.STL" ox="${p6x}" oy="${p6y}" oz="${p6z}"
+    mass="0.34277481" cx="0.27001000" cy="-0.10404812" cz="0.58732817"
+    ixx="0.00107935" ixy="2.21347E-05"  ixz="4.96201E-05"
+    iyy="0.00102479" iyz="-0.000119476" izz="0.00086827"/>
+  <xacro:arm_joint name="joint6" parent="link5" child="link6" axis="${a6}"
+    px="${p6x - p5x}" py="${p6y - p5y}" pz="${p6z - p5z}"
+    lower="0" upper="3.14" effort="200" vel="3"/>
+
+  <!-- ==================================================================== -->
+  <!--  TOOL FRAME                                                           -->
+  <!--  tool0 sits on the joint-6 axis, tool_offset metres out from the axis  -->
+  <!--  point, with +Z pointing along the approach direction (= axis 6).      -->
+  <!--  rpy solves Rz(yaw)Ry(pitch)*z_hat = a6.                               -->
+  <!-- ==================================================================== -->
+  <link name="tool0"/>
+  <joint name="link6_to_tool0" type="fixed">
+    <parent link="link6"/><child link="tool0"/>
+    <origin xyz="${tool_offset * -0.18988} ${tool_offset * 0.46117} ${tool_offset * 0.86676}"
+            rpy="0 0.5232 1.9600"/>
+  </joint>
+
+  <!-- ==================================================================== -->
+  <!--  OPTIONAL SUBSYSTEMS                                                  -->
+  <!-- ==================================================================== -->
+  <xacro:if value="$(arg use_gripper)">
+    <xacro:include filename="$(find uw_arm_description)/urdf/gripper.xacro"/>
+    <xacro:uw_gripper parent="tool0"/>
+  </xacro:if>
+
+  <xacro:if value="$(arg use_camera)">
+    <xacro:include filename="$(find uw_arm_description)/urdf/camera.xacro"/>
+    <xacro:wrist_camera parent="tool0"/>
+  </xacro:if>
+
+  <xacro:include filename="$(find uw_arm_description)/urdf/uw_arm.ros2_control.xacro"/>
+  <xacro:uw_arm_ros2_control use_gripper="$(arg use_gripper)"/>
+
+  <xacro:if value="$(arg use_gazebo)">
+    <xacro:include filename="$(find uw_arm_description)/urdf/uw_arm.gazebo.xacro"/>
+    <xacro:uw_arm_gazebo controllers_yaml="$(arg controllers_yaml)"
+                         use_camera="$(arg use_camera)"/>
+  </xacro:if>
+
+</robot>
