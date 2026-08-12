@@ -15,6 +15,7 @@ install(
     scripts/record_demo.py
     scripts/pick_and_place.py
     scripts/object_tf_publisher.py
+    scripts/grasp_manager.py
     scripts/kill_sim.sh
   DESTINATION lib/${PROJECT_NAME}
 )

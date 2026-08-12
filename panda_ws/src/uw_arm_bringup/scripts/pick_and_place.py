@@ -31,12 +31,15 @@ WHAT MAKES THE GRASP HOLD
        The contact solver resolves that by ejecting it. q is now computed from
        the object width for a genuine 3 mm squeeze per side.
 
-    3. THE GRASP IS HELD BY FRICTION, NOT BY A DETACHABLE JOINT.
-       gz-sim 8.11's DetachableJoint ignores <attach_topic>, so /gripper/attach
-       did nothing at all - verified by publishing it and then driving the arm
-       away with the target left sitting on the panel. Friction is ample once
-       both jaws actually close: 4.14 N net weight needs ~1.0 N per jaw at
-       mu=2.0.
+    3. THE GRASP IS WELDED BY grasp_manager.py, NOT BY CONTACT FRICTION.
+       A friction hold is not reliable in gz-sim: the jaws must penetrate the
+       payload to make normal force, and the contact solver answers penetration
+       by ejecting it. gz-sim 8.11's DetachableJoint cannot help - it ignores
+       <attach_topic>. grasp_manager.py records the payload's pose relative to
+       the gripper on /gripper/attach and drives it there until /gripper/detach.
+       The arm still has to reach and close correctly: the relative transform is
+       captured from wherever the gripper actually is, so a bad grasp pose stays
+       a bad grasp.
 
     4. SUCCESSIVE WAYPOINTS MUST NOT RECONFIGURE THE ARM.
        Position-only IK admits many elbow configurations. Jumping between them
@@ -66,7 +69,7 @@ from ament_index_python.packages import get_package_share_directory
 from control_msgs.action import FollowJointTrajectory
 from rclpy.action import ActionClient
 from rclpy.node import Node
-from std_msgs.msg import String
+from std_msgs.msg import Empty, String
 from tf2_ros import Buffer, TransformListener
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 
@@ -108,7 +111,14 @@ CONTINUITY = 0.45            # weight on joint-space distance when ranking
 
 
 def grip_close_position():
-    return max(0.0, OBJECT_WIDTH / 2.0 - JAW_INSET - SQUEEZE)
+    """Jaw position that just clears the payload while it is welded.
+
+    1 mm of clearance per side, NOT a squeeze. grasp_manager.py drives the
+    payload's pose directly once attached; jaws pressing into a pose-driven body
+    make the contact solver fight the weld and shake the whole arm. At video
+    scale the jaws still read as closed on the object.
+    """
+    return max(0.0, OBJECT_WIDTH / 2.0 - JAW_INSET + 0.001)
 
 
 # ----------------------------------------------------------------- kinematics
@@ -242,6 +252,8 @@ class PickAndPlace(Node):
         self.chain = Chain(urdf)
 
         self.status = self.create_publisher(String, "/demo/status", 10)
+        self.attach = self.create_publisher(Empty, "/gripper/attach", 10)
+        self.detach = self.create_publisher(Empty, "/gripper/detach", 10)
         self.arm = ActionClient(self, FollowJointTrajectory,
                                 "/arm_controller/follow_joint_trajectory")
         # Both fingers, driven by a JointTrajectoryController - the gripper has
@@ -331,8 +343,24 @@ class PickAndPlace(Node):
                                              timeout_sec=seconds + 6.0)
         self.spin(0.4)
 
+    def latch(self):
+        """Weld the payload to the gripper while the arm is stationary.
+
+        Published repeatedly: the first message on a fresh publisher is commonly
+        lost to discovery, and a weld captured late would record the offset from
+        wherever the arm had already moved to.
+        """
+        self.say("Securing payload")
+        for _ in range(12):
+            self.attach.publish(Empty())
+            self.spin(0.08)
+
     def release(self):
-        self.gripper(JAW_OPEN, "Releasing target")
+        self.say("Releasing target")
+        for _ in range(10):
+            self.detach.publish(Empty())
+            self.spin(0.06)
+        self.gripper(JAW_OPEN)
         self.spin(0.6)
 
     def solve(self, p, label, prefer=(0, 0, -1), level=True):
@@ -379,8 +407,8 @@ class PickAndPlace(Node):
         self.goto(q_grasp, 4.0, "Closing on target")
 
         self.gripper(grip_close_position(), "Closing jaws on target", seconds=2.0)
-        self.spin(1.0)
-        self.say("Payload gripped")
+        self.spin(0.8)
+        self.latch()
 
         # Retreat along the approach line, then straight up.
         q, ok, _ = self.solve(grasp_point - approach * 0.15, "retreat")

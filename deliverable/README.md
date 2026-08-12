@@ -8,7 +8,7 @@
 |---|---|
 | `PHASE1_REPORT.md` | Technical report — findings, decisions, verification |
 | `stills/` | Renders of the arm in the underwater scene |
-| `video/` | Demonstration video — 56 s, 1280x720, H.264, 1.2 MB |
+| `video/` | Pick-and-place video — 157 s, 1280x720, H.264, 2.7 MB |
 | `RECORD_VIDEO.md` | How to re-record it, and the orphaned-server trap |
 | `../panda_ws/` | The ROS 2 workspace (two packages) |
 
@@ -20,7 +20,32 @@
 | 2. Camera integrated into URDF and Gazebo | **Working** — wrist RGB-D publishes image, depth, points, camera_info |
 | 3. Underwater world: buoyancy, drag, seabed, lighting, floating/sinking objects | **Working and measured** |
 | 4. Launch files spawning world + robot together | **Working** |
-| Demonstration video | **Recorded** — `video/uw_arm_phase1_demo.mp4` |
+| Demonstration video | **Recorded** — `video/uw_arm_pick_and_place.mp4` |
+| Pick-and-place | **Working** — payload delivered 0.044 m from the drop-off point |
+
+## Pick-and-place
+
+`pick_and_place.py` locates the target from TF, solves inverse kinematics for
+every waypoint, grips, transfers and releases. Verified end to end:
+
+```
+ATTACHED 'target_canister' at 31.8 mm from grasp_link
+grasp confirmed - payload moved 0.129 m
+RELEASED 'target_canister'
+payload final position [+0.318 +0.280 +0.565], 0.044 m from the drop-off point
+Pick and place complete
+```
+
+The payload starts at (0.42, -0.28, 0.46) on the intervention panel and ends in
+the drop-off basket at (0.35, 0.25), rim height 0.50 m.
+
+Grasp adhesion is provided by `grasp_manager.py`, which welds the payload to the
+gripper frame on `/gripper/attach` and releases on `/gripper/detach`. This is the
+role `gazebo_grasp_plugin` plays in a Gazebo Classic stack; Harmonic has no
+equivalent and its `DetachableJoint` cannot attach on demand. Perception, IK,
+trajectories, fluid dynamics and approach contact are all genuinely simulated -
+only the adhesion is substituted, and a bad grasp pose still produces a bad
+grasp, because the weld records the transform from wherever the gripper is.
 
 ## The headline finding
 

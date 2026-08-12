@@ -163,6 +163,17 @@ def generate_launch_description():
                      "use_sim_time": True}],
     )
 
+    # Kinematic grasp weld. gz-sim has no gazebo_grasp_plugin equivalent and its
+    # DetachableJoint cannot attach on demand, so the hold is done here.
+    grasp_manager = Node(
+        package="uw_arm_bringup",
+        executable="grasp_manager.py",
+        output="screen",
+        parameters=[{"world": "underwater", "payload": "target_canister",
+                     "gripper_frame": "grasp_link", "reference_frame": "world",
+                     "use_sim_time": True}],
+    )
+
     def spawner(name):
         return Node(
             package="controller_manager",
@@ -208,6 +219,7 @@ def generate_launch_description():
         *image_bridges,
         world_link,
         object_tf,
+        grasp_manager,
 
         RegisterEventHandler(
             OnProcessExit(target_action=spawn_robot, on_exit=[jsb])
