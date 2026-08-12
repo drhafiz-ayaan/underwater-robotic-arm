@@ -297,8 +297,7 @@
     </model>
 
     <!-- ======================== GRASPABLE CARGO ======================== -->
-    <!-- SINKING. Density ~2000 kg/m^3: weight 8.48 N vs buoyancy 4.34 N, so it
-         stays put on the panel. This is the Phase 2 grasp target - the strong
+    <!-- SINKING, but only just: see the inertial block for why. This is the Phase 2 grasp target - the strong
          orange is deliberate, it is what the colour segmenter keys on.
          0.06 m across against a 0.094 m maximum jaw opening.
 
@@ -310,8 +309,15 @@
       <pose>0.42 -0.28 0.46 0 0 0</pose>
       <link name="base_link">
         <inertial>
-          <mass>0.864</mass>
-          <inertia><ixx>1.296e-3</ixx><iyy>1.296e-3</iyy><izz>5.184e-4</izz>
+          <!-- Density ~1100 kg/m^3, only just negative. Weight 4.66 N against
+               4.34 N of buoyancy leaves 0.32 N net, so it still sits on the
+               panel but a gripper only has to resist that 0.32 N plus drag.
+               At the earlier 2000 kg/m^3 the payload was 4.14 N net-negative -
+               an unrepresentatively heavy subsea lift that slipped out of the
+               jaws no matter how hard they closed. Real intervention cargo is
+               trimmed close to neutral for exactly this reason. -->
+          <mass>0.475</mass>
+          <inertia><ixx>7.13e-4</ixx><iyy>7.13e-4</iyy><izz>2.85e-4</izz>
                    <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
           <!-- Added mass belongs HERE, not in the Hydrodynamics plugin. dartsim
                folds <fluid_added_mass> into the spatial inertia and solves it

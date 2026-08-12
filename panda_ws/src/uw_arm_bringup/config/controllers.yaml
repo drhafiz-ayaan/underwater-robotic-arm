@@ -15,8 +15,11 @@ controller_manager:
     arm_controller:
       type: joint_trajectory_controller/JointTrajectoryController
 
+    # A JointTrajectoryController, not GripperActionController: the gripper has
+    # two independently actuated fingers (no mimic - see gripper.xacro), and
+    # GripperActionController drives exactly one joint.
     gripper_controller:
-      type: position_controllers/GripperActionController
+      type: joint_trajectory_controller/JointTrajectoryController
 
 
 joint_state_broadcaster:
@@ -64,11 +67,23 @@ arm_controller:
 gripper_controller:
   ros__parameters:
     use_sim_time: true
-    joint: finger_left_joint
-    # Stalling is the normal outcome of a successful grasp: the jaws stop on the
-    # object before reaching the commanded position.
-    allow_stalling: true
-    max_effort: 50.0
-    goal_tolerance: 0.005
-    stall_velocity_threshold: 0.001
-    stall_timeout: 1.0
+    joints:
+      - finger_left_joint
+      - finger_right_joint
+    command_interfaces:
+      - position
+    state_interfaces:
+      - position
+      - velocity
+    state_publish_rate: 50.0
+    action_monitor_rate: 20.0
+    allow_partial_joints_goal: false
+
+    # Generous goal tolerance. A successful grasp STALLS the fingers on the
+    # object short of the commanded position - that is the desired outcome, not
+    # a failure, so the tolerance must exceed the squeeze depth.
+    constraints:
+      stopped_velocity_tolerance: 0.05
+      goal_time: 3.0
+      finger_left_joint: {trajectory: 0.05, goal: 0.02}
+      finger_right_joint: {trajectory: 0.05, goal: 0.02}

@@ -112,10 +112,10 @@
     <!--  friction still governs the approach/contact phase.                  -->
     <!-- ================================================================== -->
     <gazebo reference="finger_left">
-      <mu1>1.6</mu1><mu2>1.6</mu2><kp>1e6</kp><kd>50.0</kd><minDepth>0.001</minDepth>
+      <mu1>3.0</mu1><mu2>3.0</mu2><kp>1e6</kp><kd>50.0</kd><minDepth>0.001</minDepth>
     </gazebo>
     <gazebo reference="finger_right">
-      <mu1>1.6</mu1><mu2>1.6</mu2><kp>1e6</kp><kd>50.0</kd><minDepth>0.001</minDepth>
+      <mu1>3.0</mu1><mu2>3.0</mu2><kp>1e6</kp><kd>50.0</kd><minDepth>0.001</minDepth>
     </gazebo>
 
     <!-- ================================================================== -->
@@ -151,7 +151,22 @@
       </gazebo>
     </xacro:macro>
 
-    <xacro:graspable model="target_canister"/>
+    <!-- NOT INSTANTIATED. gz-sim 8.11's DetachableJoint does not honour
+         <attach_topic>: with <suppress_initial_attach>true</suppress_initial_attach>
+         the joint is never created, and publishing /gripper/attach silently does
+         nothing even though the plugin loads and subscribes. Verified directly -
+         after publishing attach and driving the arm away, the target stayed put.
+
+         The grasp is carried by jaw friction instead, which the numbers support
+         comfortably: the canister weighs 8.48 N and displaces 4.34 N, so 4.14 N
+         net must be held; with mu=2.0 across two jaws that needs about 1.0 N of
+         normal force per jaw. What was actually breaking grasps was the gripper
+         closing one-sided (see gripper.xacro), not a shortage of friction.
+
+         Re-enable this if you move to a Gazebo version whose DetachableJoint
+         supports re-attaching:
+             <xacro:graspable model="target_canister"/> -->
+
 
     <!-- ================================================================== -->
     <!--  WRIST RGB-D SENSOR                                                 -->

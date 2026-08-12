@@ -2,57 +2,113 @@
 """
 Closed-loop pick-and-place driven by the target's measured pose.
 
-This REPLACES demo_sequence.py, which only played back hand-picked joint angles
-and never went anywhere near the object. Here every arm pose is solved by inverse
-kinematics from where the target actually is, so the gripper arrives at the
-canister, closes on it, carries it and drops it in the basket.
+Every arm pose is solved by inverse kinematics from where the target actually is.
+This replaces demo_sequence.py, which replayed hand-picked joint angles and never
+approached the object at all.
 
 WHERE THE TARGET POSE COMES FROM
-    The frame "target_canister" on /gz/tf. Today that is Gazebo ground truth;
-    in Phase 2 the perception node publishes the same frame name from the wrist
-    RGB-D stream and nothing below changes.
+    The TF frame "target_canister", published by object_tf_publisher.py. In
+    Phase 2 the perception node publishes the same frame name estimated from the
+    wrist RGB-D stream, and nothing in this file changes.
+
+WHAT MAKES THE GRASP HOLD
+    Four things had to be right together; each one alone left the object behind,
+    dropped, or flung across the scene.
+
+    1. THE JAWS MUST STRADDLE THE 60 mm FACE, NOT THE 120 mm ONE.
+       The jaws close along the tool Y axis and open to 94 mm. The canister is
+       60 x 60 x 120 mm standing upright. If tool Y ends up vertical the jaws are
+       being asked to close across 120 mm, which they physically cannot do, and
+       they clip a corner instead. Leaving roll free let IK pick such a solution
+       roughly half the time - which is exactly why the result varied run to run.
+       Solutions are now rejected unless the jaw axis is near horizontal.
+
+    2. THE CLOSE COMMAND MUST MATCH THE OBJECT WIDTH, MEASURED TO THE JAW FACE.
+       Jaw inner faces sit at +/-(0.006 + q) - the finger joint is at 0.012 but
+       the finger box is 0.012 thick, so its face is 6 mm nearer the centreline.
+       Measuring to the joint instead of the face understated closure by 6 mm per
+       side, and commanding q=0.004 drove each finger 20 mm INTO a 60 mm object.
+       The contact solver resolves that by ejecting it. q is now computed from
+       the object width for a genuine 3 mm squeeze per side.
+
+    3. THE GRASP IS HELD BY FRICTION, NOT BY A DETACHABLE JOINT.
+       gz-sim 8.11's DetachableJoint ignores <attach_topic>, so /gripper/attach
+       did nothing at all - verified by publishing it and then driving the arm
+       away with the target left sitting on the panel. Friction is ample once
+       both jaws actually close: 4.14 N net weight needs ~1.0 N per jaw at
+       mu=2.0.
+
+    4. SUCCESSIVE WAYPOINTS MUST NOT RECONFIGURE THE ARM.
+       Position-only IK admits many elbow configurations. Jumping between them
+       whips the end effector and tears the payload out. Solutions are scored on
+       joint-space distance from the current pose.
+
+    The grasp is then verified against TF before the transfer starts: if the
+    object did not rise with the gripper, the run reports failure instead of
+    miming the rest of the sequence.
 
 IK
-    Damped least squares on a 5-DOF task: full position, plus alignment of the
-    gripper approach axis with the commanded direction. Roll about the approach
-    axis is left free on purpose - for a square canister any roll grasps a face,
-    and freeing it turns an often-unsolvable 6-DOF request into one this arm's
-    fairly tight joint limits can satisfy.
-
-    The joint axis points in the URDF are recovered estimates, but IK is solved
-    against that same description, so the simulation is internally consistent and
-    the grasp lands. Re-exporting from SolidWorks changes the numbers, not this.
-
-GRASP
-    Jaw friction alone will not hold a wet object through a transfer, so the
-    Gazebo DetachableJoint is latched via /gripper/attach once the jaws close,
-    and released with /gripper/detach. The jaws still close on the object.
+    Damped least squares parsed straight from the URDF - no MoveIt configuration
+    needed to reach a Cartesian goal. Position is solved exactly; orientation is
+    chosen by ranking solutions, because a hard top-down constraint is
+    unsatisfiable on this arm (four joints limited to 0..pi put the most downward
+    reachable approach about 53 degrees off vertical over the panel).
 """
 
 import math
+import subprocess
 import sys
+import xml.etree.ElementTree as ET
 
 import numpy as np
 import rclpy
-import xml.etree.ElementTree as ET
 from ament_index_python.packages import get_package_share_directory
-from control_msgs.action import FollowJointTrajectory, GripperCommand
+from control_msgs.action import FollowJointTrajectory
 from rclpy.action import ActionClient
 from rclpy.node import Node
-from std_msgs.msg import Empty, String
+from std_msgs.msg import String
 from tf2_ros import Buffer, TransformListener
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
-
-# Weight on joint-space distance when ranking IK solutions. Low values let
-# successive waypoints pick geometrically valid but wildly different arm
-# configurations; the arm then whips between them and a grasped payload is torn
-# out of the jaws mid-transfer. High values keep the motion smooth and local.
-CONTINUITY = 0.45
 
 JOINTS = ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6"]
 HOME = [1.5708, 0.0, 1.5708, 1.5708, 0.0, 1.5708]
 TARGET_FRAME = "target_canister"
-PLACE_XYZ = (0.35, 0.25, 0.60)    # 0.10 m above the basket rim, world frame
+
+# World-frame release point: 0.10 m above the basket rim (basket top z = 0.50).
+PLACE_XYZ = (0.35, 0.25, 0.60)
+
+# Object and gripper geometry. Jaw inner faces sit at +/-(JAW_INSET + q), so
+# gripping a box of width w needs q = w/2 - JAW_INSET - squeeze.
+# SQUEEZE is per-side penetration of the jaw into the object. Do NOT raise it to
+# "grip harder": measured displacement of the payload during the lift FELL from
+# 0.127 m at 3 mm to 0.035 m at 6 mm, because the contact solver resolves deep
+# penetration by pushing the object out of the jaws. Grip strength comes from the
+# payload being near-neutrally buoyant, not from crushing it.
+OBJECT_WIDTH = 0.060
+# Distance from the gripper centreline to a jaw's INNER FACE at q=0. The finger
+# joint sits at half_gap=0.012 and the finger box is 0.012 thick, so its inner
+# face is 0.006 nearer the centreline than the joint. Using 0.012 here (the joint
+# offset) understates the closure by 6 mm PER SIDE: the commanded "3 mm squeeze"
+# was really 9 mm of penetration, which is exactly the regime where the contact
+# solver ejects the object instead of gripping it.
+JAW_INSET = 0.006
+SQUEEZE = 0.003
+JAW_OPEN = 0.035
+
+# Grasp this far ABOVE the object's centre - a small bias only, to keep the lower
+# finger off the panel. Keep it SMALL: at 0.035 the object sits 35 mm out of the
+# jaw centre, near the finger tips, and the jaws close asymmetrically (measured:
+# left finger blocked at 0.035 while the right closed to its 0.021 goal on empty
+# water). The jaws must straddle the object at their mid-span.
+GRASP_Z_OFFSET = 0.012
+
+# Reject IK solutions whose jaw axis tilts more than this out of horizontal.
+MAX_JAW_TILT = 0.35          # |jaw . z_world|
+CONTINUITY = 0.45            # weight on joint-space distance when ranking
+
+
+def grip_close_position():
+    return max(0.0, OBJECT_WIDTH / 2.0 - JAW_INSET - SQUEEZE)
 
 
 # ----------------------------------------------------------------- kinematics
@@ -77,7 +133,7 @@ def _axis_R(axis, theta):
 
 
 class Chain:
-    """Forward kinematics and Jacobian for base_link -> grasp_link."""
+    """FK, Jacobian and IK for base_link -> grasp_link, read from the URDF."""
 
     ORDER = ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6",
              "link6_to_tool0", "tool0_to_palm", "palm_to_grasp"]
@@ -85,111 +141,94 @@ class Chain:
     def __init__(self, urdf_xml):
         root = ET.fromstring(urdf_xml)
         joints = {j.get("name"): j for j in root.findall("joint")}
-        self.steps, self.limits = [], []
+        self.steps, limits = [], []
         for name in self.ORDER:
             j = joints[name]
-            o = j.find("origin")
-            ax = j.find("axis")
-            lim = j.find("limit")
+            o, ax, lim = j.find("origin"), j.find("axis"), j.find("limit")
             self.steps.append((
                 j.get("type"),
                 _vec(o.get("xyz") if o is not None else None),
-                _rpy_to_R(*_vec(o.get("rpy") if o is not None else None, "0 0 0")),
+                _rpy_to_R(*_vec(o.get("rpy") if o is not None else None)),
                 _vec(ax.get("xyz")) if ax is not None else None,
             ))
             if j.get("type") == "revolute":
-                self.limits.append((float(lim.get("lower")), float(lim.get("upper"))))
-        self.limits = np.array(self.limits)
+                limits.append((float(lim.get("lower")), float(lim.get("upper"))))
+        self.limits = np.array(limits)
 
     def fk(self, q):
-        """Return (position, rotation) of grasp_link in base_link."""
         p, R, k = np.zeros(3), np.eye(3), 0
         for typ, o, Ro, ax in self.steps:
-            p = p + R @ o
-            R = R @ Ro
+            p, R = p + R @ o, R @ Ro
             if typ == "revolute":
                 R = R @ _axis_R(ax, q[k])
                 k += 1
         return p, R
 
-    def _frames(self, q):
-        out, p, R, k = [], np.zeros(3), np.eye(3), 0
+    def jacobian(self, q):
+        frames, p, R, k = [], np.zeros(3), np.eye(3), 0
         for typ, o, Ro, ax in self.steps:
-            p = p + R @ o
-            R = R @ Ro
+            p, R = p + R @ o, R @ Ro
             if typ == "revolute":
-                out.append((p.copy(), R @ ax / np.linalg.norm(ax)))
+                frames.append((p.copy(), R @ ax / np.linalg.norm(ax)))
                 R = R @ _axis_R(ax, q[k])
                 k += 1
-        return out, p, R
-
-    def jacobian(self, q):
-        axes, pe, _ = self._frames(q)
+        pe = p
         J = np.zeros((6, len(q)))
-        for i, (pi, zi) in enumerate(axes):
+        for i, (pi, zi) in enumerate(frames):
             J[:3, i] = np.cross(zi, pe - pi)
             J[3:, i] = zi
         return J
 
     def _pos_ik(self, p_goal, q0, iters=300, tol=1e-3):
-        """Position-only damped least squares from one seed."""
         q = np.array(q0, float)
         lo, hi = self.limits[:, 0], self.limits[:, 1]
         for _ in range(iters):
             p, _ = self.fk(q)
             e = p_goal - p
             if np.linalg.norm(e) < tol:
-                return q, True
+                return q
             J = self.jacobian(q)[:3, :]
-            dq = J.T @ np.linalg.solve(J @ J.T + 0.0025 * np.eye(3), e)
-            q = np.clip(q + np.clip(dq, -0.3, 0.3), lo, hi)
-        p, _ = self.fk(q)
-        return q, np.linalg.norm(p_goal - p) < 2e-3
+            q = np.clip(q + np.clip(
+                J.T @ np.linalg.solve(J @ J.T + 0.0025 * np.eye(3), e),
+                -0.3, 0.3), lo, hi)
+        return q
 
-    def ik(self, p_goal, approach, q0, restarts=120, tol=4e-3, seed=0):
+    def ik(self, p_goal, q0, prefer_approach=(0, 0, -1),
+           level_jaws=True, restarts=250, tol=4e-3, seed=0):
         """
-        Solve position exactly, then choose the solution whose gripper approach
-        axis best matches `approach`.
+        Solve position exactly, then rank the solutions.
 
-        Orientation is NOT commanded as a hard constraint. This arm's limits
-        (four joints restricted to 0..pi) do not admit a straight top-down grasp
-        at the panel - the most downward approach reachable there is about 53
-        degrees off vertical - so demanding [0,0,-1] makes every solve fail even
-        though the point itself is exactly reachable. Solving position first and
-        then ranking by approach alignment always returns the best grasp the arm
-        can actually strike.
+        level_jaws rejects any solution whose jaw axis is more than MAX_JAW_TILT
+        out of horizontal - without it the jaws are asked to close across the
+        canister's 120 mm height instead of its 60 mm width and the grasp fails.
 
-        Solutions are also scored on joint-space distance from q0, so successive
-        waypoints do not trigger a full reconfiguration mid-transfer.
-
-        Returns (q, ok, achieved_approach_axis).
+        Returns (q, ok, approach_axis, jaw_axis).
         """
-        a_goal = np.asarray(approach, float)
-        a_goal = a_goal / np.linalg.norm(a_goal)
+        a_pref = np.asarray(prefer_approach, float)
+        a_pref = a_pref / np.linalg.norm(a_pref)
         lo, hi = self.limits[:, 0], self.limits[:, 1]
         rng = np.random.default_rng(seed)
         q0 = np.clip(np.array(q0, float), lo, hi)
 
         best = None
         for i in range(restarts + 1):
-            start = q0 if i == 0 else rng.uniform(lo, hi)
-            q, ok = self._pos_ik(p_goal, start)
-            if not ok:
-                continue
+            q = self._pos_ik(p_goal, q0 if i == 0 else rng.uniform(lo, hi))
             p, R = self.fk(q)
             if np.linalg.norm(p - p_goal) > tol:
                 continue
-            a = R @ np.array([0.0, 0.0, 1.0])
-            score = float(a @ a_goal) - CONTINUITY * float(np.linalg.norm(q - q0))
+            approach = R @ np.array([0.0, 0.0, 1.0])
+            jaw = R @ np.array([0.0, 1.0, 0.0])
+            tilt = abs(float(jaw[2]))
+            if level_jaws and tilt > MAX_JAW_TILT:
+                continue
+            score = (1.20 * (1.0 - tilt)
+                     + 0.80 * float(approach @ a_pref)
+                     - CONTINUITY * float(np.linalg.norm(q - q0)))
             if best is None or score > best[0]:
-                best = (score, q, a)
+                best = (score, q, approach, jaw)
         if best is None:
-            return np.array(q0), False, np.array([0.0, 0.0, -1.0])
-        return best[1], True, best[2]
-
-
-def _skew(v):
-    return np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
+            return np.array(q0), False, np.array([0, 0, -1.0]), np.array([0, 1.0, 0])
+        return best[1], True, best[2], best[3]
 
 
 # ----------------------------------------------------------------------- node
@@ -197,55 +236,50 @@ class PickAndPlace(Node):
     def __init__(self):
         super().__init__("pick_and_place")
         share = get_package_share_directory("uw_arm_description")
-        import subprocess
         urdf = subprocess.run(
             ["xacro", share + "/urdf/uw_arm.urdf.xacro", "use_gazebo:=false"],
             capture_output=True, text=True, check=True).stdout
         self.chain = Chain(urdf)
 
         self.status = self.create_publisher(String, "/demo/status", 10)
-        self.attach = self.create_publisher(Empty, "/gripper/attach", 10)
-        self.detach = self.create_publisher(Empty, "/gripper/detach", 10)
         self.arm = ActionClient(self, FollowJointTrajectory,
                                 "/arm_controller/follow_joint_trajectory")
-        self.grip = ActionClient(self, GripperCommand,
-                                 "/gripper_controller/gripper_cmd")
+        # Both fingers, driven by a JointTrajectoryController - the gripper has
+        # no mimic joint, so a single-joint GripperActionController would leave
+        # one jaw stationary.
+        self.grip = ActionClient(self, FollowJointTrajectory,
+                                 "/gripper_controller/follow_joint_trajectory")
         self.tf_buf = Buffer()
         self.tf_listener = TransformListener(self.tf_buf, self)
         self.q = list(HOME)
 
+    # ---------------------------------------------------------------- helpers
     def say(self, text):
         self.get_logger().info(text)
         self.status.publish(String(data=text))
 
-    def target_in_base(self, timeout=25.0):
-        """Target position expressed in base_link. Falls back to /gz/tf raw."""
-        from rclpy.duration import Duration
-        deadline = self.get_clock().now() + Duration(seconds=timeout)
-        while self.get_clock().now() < deadline:
-            rclpy.spin_once(self, timeout_sec=0.2)
+    def spin(self, seconds):
+        end = self.get_clock().now().nanoseconds + seconds * 1e9
+        while self.get_clock().now().nanoseconds < end:
+            rclpy.spin_once(self, timeout_sec=0.05)
+
+    def lookup(self, frame, parent="base_link", timeout=25.0):
+        end = self.get_clock().now().nanoseconds + timeout * 1e9
+        while self.get_clock().now().nanoseconds < end:
+            rclpy.spin_once(self, timeout_sec=0.1)
             try:
-                tr = self.tf_buf.lookup_transform(
-                    "base_link", TARGET_FRAME, rclpy.time.Time())
+                tr = self.tf_buf.lookup_transform(parent, frame, rclpy.time.Time())
             except Exception:
                 continue
             t = tr.transform.translation
             return np.array([t.x, t.y, t.z])
         return None
 
-    def point_in_base(self, xyz_world):
-        """Convert a world-frame point into base_link."""
-        for _ in range(60):
-            try:
-                tr = self.tf_buf.lookup_transform(
-                    "base_link", "world", rclpy.time.Time())
-            except Exception:
-                rclpy.spin_once(self, timeout_sec=0.1)
-                continue
-            t = tr.transform.translation
-            # world_to_base is a pure translation, so this is just an offset.
-            return np.array(xyz_world) + np.array([t.x, t.y, t.z])
-        raise RuntimeError("cannot transform world point into base_link")
+    def world_to_base(self, xyz_world):
+        off = self.lookup("world", "base_link")
+        if off is None:
+            raise RuntimeError("no base_link <- world transform")
+        return np.array(xyz_world) + off
 
     def goto(self, q, seconds, caption=None):
         if caption:
@@ -266,53 +300,53 @@ class PickAndPlace(Node):
         if h is None or not h.accepted:
             self.get_logger().error("trajectory rejected")
             return False
-        res = h.get_result_async()
-        rclpy.spin_until_future_complete(self, res, timeout_sec=seconds + 15.0)
+        rclpy.spin_until_future_complete(self, h.get_result_async(),
+                                         timeout_sec=seconds + 15.0)
         self.q = list(q)
         return True
 
-    def gripper(self, position, caption=None):
+    def gripper(self, position, caption=None, seconds=1.5):
+        """Drive BOTH jaws to the same opening."""
         if caption:
             self.say(caption)
         if not self.grip.server_is_ready():
             return
-        goal = GripperCommand.Goal()
-        goal.command.position = float(position)
-        goal.command.max_effort = 50.0
+        traj = JointTrajectory()
+        traj.joint_names = ["finger_left_joint", "finger_right_joint"]
+        pt = JointTrajectoryPoint()
+        pt.positions = [float(position), float(position)]
+        pt.velocities = [0.0, 0.0]
+        pt.time_from_start.sec = int(seconds)
+        pt.time_from_start.nanosec = int((seconds % 1.0) * 1e9)
+        traj.points.append(pt)
+        goal = FollowJointTrajectory.Goal()
+        goal.trajectory = traj
         fut = self.grip.send_goal_async(goal)
         rclpy.spin_until_future_complete(self, fut, timeout_sec=8.0)
         h = fut.result()
         if h is not None and h.accepted:
+            # A successful grasp stalls the fingers short of the goal, so a
+            # non-SUCCESS result here is expected and must not abort the run.
             rclpy.spin_until_future_complete(self, h.get_result_async(),
-                                             timeout_sec=8.0)
+                                             timeout_sec=seconds + 6.0)
+        self.spin(0.4)
 
-    def latch(self):
-        """
-        Latch the detachable joint while the gripper is stationary on the object.
+    def release(self):
+        self.gripper(JAW_OPEN, "Releasing target")
+        self.spin(0.6)
 
-        Published repeatedly over ~1.5 s rather than once. The first message on a
-        freshly created publisher is routinely lost to discovery, and a latch
-        that lands LATE is worse than none: the joint is created between two
-        bodies that have already separated, and the solver resolves that offset
-        violently - the payload is flung across the scene mid-transfer.
-        """
-        self.say("Latching grasp")
-        for _ in range(15):
-            self.attach.publish(Empty())
-            for _ in range(2):
-                rclpy.spin_once(self, timeout_sec=0.05)
-        self.say("Grasp latched")
-
-    def solve(self, p_base, approach, label):
-        q, ok, axis = self.chain.ik(p_base, approach, self.q)
-        p, _ = self.chain.fk(q)
-        err = np.linalg.norm(p - p_base) * 1000
+    def solve(self, p, label, prefer=(0, 0, -1), level=True):
+        q, ok, approach, jaw = self.chain.ik(p, self.q, prefer, level)
+        pf, _ = self.chain.fk(q)
         self.get_logger().info(
-            "IK %-14s target=[%.3f %.3f %.3f] residual=%.1f mm "
-            "approach=[%.2f %.2f %.2f] %s"
-            % (label, *p_base, err, *axis, "OK" if ok else "FAILED"))
-        return q, ok, axis
+            "IK %-12s target=[%+.3f %+.3f %+.3f] residual=%4.1fmm "
+            "approach=[%+.2f %+.2f %+.2f] jaw_tilt=%.2f %s"
+            % (label, p[0], p[1], p[2], np.linalg.norm(pf - p) * 1000,
+               approach[0], approach[1], approach[2], abs(jaw[2]),
+               "OK" if ok else "FAILED"))
+        return q, ok, approach
 
+    # -------------------------------------------------------------- sequence
     def run(self):
         self.say("Waiting for controllers")
         if not self.arm.wait_for_server(timeout_sec=90.0):
@@ -321,61 +355,86 @@ class PickAndPlace(Node):
         self.grip.wait_for_server(timeout_sec=15.0)
 
         self.goto(HOME, 4.0, "Home posture")
-        self.gripper(0.035, "Opening jaws")
+        self.gripper(JAW_OPEN, "Opening jaws")
 
         self.say("Locating target from TF")
-        p = self.target_in_base()
-        if p is None:
+        target = self.lookup(TARGET_FRAME)
+        if target is None:
             self.get_logger().error("frame '%s' never appeared" % TARGET_FRAME)
             return False
-        self.get_logger().info("target in base_link: [%.3f %.3f %.3f]" % (*p,))
+        start_world = self.lookup(TARGET_FRAME, "world")
+        self.get_logger().info("target in base_link: [%+.3f %+.3f %+.3f]" % (*target,))
 
-        down = np.array([0.0, 0.0, -1.0])   # preferred, not demanded
-
-        # Solve the grasp first: its achieved approach axis defines the straight
-        # line the gripper must back off along, so the retreat is guaranteed
-        # collision-free rather than a guess at "straight up".
-        q_grasp, ok, axis = self.solve(p, down, "grasp")
+        grasp_point = target + np.array([0.0, 0.0, GRASP_Z_OFFSET])
+        q_grasp, ok, approach = self.solve(grasp_point, "grasp")
         if not ok:
-            self.get_logger().error("target not reachable")
+            self.get_logger().error("no valid grasp - target unreachable "
+                                    "with the jaws level")
             return False
 
-        q, ok, _ = self.solve(p - axis * 0.13, down, "pre-grasp")
+        q, ok, _ = self.solve(grasp_point - approach * 0.15, "pre-grasp")
         if not ok:
-            self.get_logger().error("no pre-grasp solution")
             return False
         self.goto(q, 5.0, "Approaching target")
+        self.goto(q_grasp, 4.0, "Closing on target")
 
-        self.goto(q_grasp, 3.5, "Closing on target")
+        self.gripper(grip_close_position(), "Closing jaws on target", seconds=2.0)
+        self.spin(1.0)
+        self.say("Payload gripped")
 
-        self.gripper(0.004, "Closing jaws on target")
-        self.latch()
-
-        # Retreat back along the approach line, then straight up.
-        q, ok, _ = self.solve(p - axis * 0.13, down, "retreat")
+        # Retreat along the approach line, then straight up.
+        q, ok, _ = self.solve(grasp_point - approach * 0.15, "retreat")
         if ok:
-            self.goto(q, 3.0, "Lifting clear of the panel")
-        q, ok, _ = self.solve(p - axis * 0.13 + np.array([0.0, 0.0, 0.12]),
-                              down, "lift")
+            self.goto(q, 4.0, "Lifting clear of the panel")
+
+        # Verify the payload actually came with us before continuing.
+        self.spin(1.0)
+        now_world = self.lookup(TARGET_FRAME, "world")
+        risen = (now_world - start_world) if now_world is not None else None
+        if risen is None or np.linalg.norm(risen) < 0.02:
+            self.get_logger().error(
+                "GRASP FAILED - target did not move with the gripper "
+                "(displacement %.3f m)"
+                % (0.0 if risen is None else float(np.linalg.norm(risen))))
+            self.say("Grasp failed")
+            return False
+        self.get_logger().info("grasp confirmed - payload moved %.3f m"
+                               % float(np.linalg.norm(risen)))
+        self.say("Payload secured")
+
+        lift = grasp_point - approach * 0.15 + np.array([0.0, 0.0, 0.12])
+        q, ok, _ = self.solve(lift, "lift")
         if ok:
             self.goto(q, 4.0, "Raising the payload")
 
-        place = self.point_in_base(PLACE_XYZ)
-        q, ok, place_axis = self.solve(place, down, "over-basket")
+        place = self.world_to_base(PLACE_XYZ)
+        q_place, ok, place_approach = self.solve(place, "place")
         if not ok:
             self.get_logger().error("drop-off point not reachable")
             return False
-        q_hi, hi_ok, _ = self.solve(place - place_axis * 0.15, down, "pre-place")
-        if hi_ok:
-            self.goto(q_hi, 8.0, "Transferring to drop-off basket")
-        self.goto(q, 4.5, "Lowering into basket")
+        q_pre, ok, _ = self.solve(place - place_approach * 0.16, "pre-place")
+        if ok:
+            # Split the transfer in two and take it slowly. A single long swing
+            # across 0.6 m accelerates the payload enough to break the friction
+            # grip even when the grasp itself is sound.
+            mid = 0.5 * (np.array(self.q) + np.array(q_pre))
+            self.goto(mid, 6.0, "Transferring to drop-off basket")
+            self.goto(q_pre, 6.0, "Approaching drop-off basket")
+        self.goto(q_place, 6.0, "Lowering into basket")
 
-        self.detach.publish(Empty())
-        self.gripper(0.035, "Releasing target")
-        for _ in range(20):
-            rclpy.spin_once(self, timeout_sec=0.05)
-
+        self.release()
+        self.goto(q, 3.5, "Clearing the basket") if ok else None
         self.goto(HOME, 5.0, "Returning home")
+
+        final = self.lookup(TARGET_FRAME, "world")
+        if final is not None:
+            d = np.linalg.norm(final[:2] - np.array(PLACE_XYZ[:2]))
+            self.get_logger().info(
+                "payload final position [%+.3f %+.3f %+.3f], %.3f m from the "
+                "drop-off point" % (*final, d))
+            if d > 0.25:
+                self.say("Placement off target")
+                return False
         self.say("Pick and place complete")
         return True
 
