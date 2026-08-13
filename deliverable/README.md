@@ -1,12 +1,12 @@
-# Phase 1 Deliverable — Underwater 6-DOF Manipulator
+# Underwater Intervention Manipulator — Deliverable
 
-**Ifra Aerial Robotics** · ROS 2 Jazzy · Gazebo Harmonic (gz-sim 8.11)
+**Ayaan Aatif** · ROS 2 Jazzy · Gazebo Harmonic (gz-sim 8.11)
 
 ## Contents
 
 | Path | What it is |
 |---|---|
-| `PHASE1_REPORT.md` | Technical report — findings, decisions, verification |
+| `TECHNICAL_REPORT.md` | Technical report — findings, decisions, verification |
 | `stills/` | Renders of the arm in the underwater scene |
 | `video/` | Pick-and-place video — 157 s, 1280x720, H.264, 2.7 MB |
 | `RECORD_VIDEO.md` | How to re-record it, and the orphaned-server trap |
@@ -14,7 +14,7 @@
 
 ## Status at a glance
 
-| Phase 1 requirement | State |
+| Capability | State |
 |---|---|
 | 1. Arm in ROS 2 + Gazebo with `joint_state_broadcaster` + `joint_trajectory_controller` | **Working** — all three controllers activate, trajectories execute |
 | 2. Camera integrated into URDF and Gazebo | **Working** — wrist RGB-D publishes image, depth, points, camera_info |
@@ -58,7 +58,7 @@ looked correct at zero configuration and was meaningless in motion.
 Joint axis *directions* were correct, so the six axis *locations* were recovered
 from the STL geometry and now live in one editable block at the top of
 `uw_arm_description/urdf/uw_arm.urdf.xacro`. Details and the exact re-export
-procedure are in `PHASE1_REPORT.md`.
+procedure are in `TECHNICAL_REPORT.md`.
 
 ## Quick start
 

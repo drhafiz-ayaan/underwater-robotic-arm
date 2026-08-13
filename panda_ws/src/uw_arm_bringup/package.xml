@@ -5,9 +5,9 @@
   <version>0.1.0</version>
   <description>
     Underwater Gazebo world, controller configuration and launch files for the
-    Ifra Aerial Robotics underwater manipulator.
+    Ayaan Aatif underwater manipulator.
   </description>
-  <maintainer email="drhafiz.ayaan@gmail.com">Ifra Aerial Robotics</maintainer>
+  <maintainer email="drhafiz.ayaan@gmail.com">Ayaan Aatif</maintainer>
   <license>BSD-3-Clause</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>

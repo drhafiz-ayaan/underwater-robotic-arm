@@ -1,12 +1,15 @@
 <?xml version="1.0" ?>
 <!--
-  Underwater intervention scene for the Ifra Aerial Robotics manipulator.
+  Underwater intervention scene for the Ayaan Aatif manipulator.
   Gazebo Harmonic (gz-sim 8).
 
   LAYOUT (world Z is up, metres)
     z = +8.00   water surface (graded-buoyancy transition to air)
+    z = +0.80   the payload HOVERS here - trimmed to neutral buoyancy, free in
+                the water column rather than resting on any surface
     z = +0.50   top of the manipulator pedestal - the arm base mounts here
-    z = +0.40   top of the intervention panel - graspable cargo sits here
+    z = +0.50   rim of the collection basket
+    z = +0.40   top of the intervention panel (scenery / clutter)
     z =  0.00   seabed
 
   BUOYANCY POLICY
@@ -37,7 +40,7 @@
 
     <!-- background_color is what the wrist camera sees at infinity. Without it
          the RGB-D stream shows a bright sky, which destroys the perception
-         pipeline's colour segmentation in Phase 2. -->
+         pipeline's colour segmentation in perception. -->
     <plugin filename="gz-sim-sensors-system"
             name="gz::sim::systems::Sensors">
       <render_engine>ogre2</render_engine>
@@ -148,7 +151,7 @@
       <grid>false</grid>
       <!-- No <sky/>. It renders a bright horizon band across the top of every
            camera, which destroys the submerged look and, more practically,
-           gives the Phase 2 segmenter a large bright region to trip over. -->
+           gives the colour segmenter a large bright region to trip over. -->
     </scene>
 
     <!-- Filtered downwelling sunlight: dim, cool, and heavily attenuated. -->
@@ -227,7 +230,7 @@
     </model>
 
     <!-- Scattered boulders: visual texture for the scene and, more usefully,
-         non-target clutter that the Phase 2 segmenter has to reject. -->
+         non-target clutter that the colour segmenter has to reject. -->
     <model name="boulder_a">
       <static>true</static>
       <pose>-1.6 1.3 0.22 0.3 0.2 0.7</pose>
@@ -262,7 +265,11 @@
         <collision name="collision"><geometry><box><size>0.30 0.30 0.50</size></box></geometry></collision>
         <visual name="visual">
           <geometry><box><size>0.30 0.30 0.50</size></box></geometry>
-          <material><diffuse>0.85 0.55 0.10 1</diffuse><specular>0.2 0.2 0.2 1</specular></material>
+          <!-- Deliberately NOT orange/amber. The target payload is orange
+               (hue ~20 deg); an amber pedestal sat ~15 deg away and is the
+               single largest false-positive risk for colour segmentation,
+               made worse by sitting directly under the wrist camera. -->
+          <material><diffuse>0.22 0.26 0.30 1</diffuse><specular>0.25 0.25 0.25 1</specular></material>
         </visual>
       </link>
     </model>
@@ -297,27 +304,27 @@
     </model>
 
     <!-- ======================== GRASPABLE CARGO ======================== -->
-    <!-- SINKING, but only just: see the inertial block for why. This is the Phase 2 grasp target - the strong
+    <!-- NEUTRALLY BUOYANT - hovers in open water. See the inertial block. This is the perception grasp target - the strong
          orange is deliberate, it is what the colour segmenter keys on.
-         0.06 m across against a 0.094 m maximum jaw opening.
+         0.06 m across against an 0.082 m jaw opening.
 
          Box, not cylinder: the graded_buoyancy option only supports <box> and
          <sphere> collisions ("Only <box> and <sphere> collisions are supported
          by the graded buoyancy option", Buoyancy.cc:616). A cylinder here is
          silently given zero buoyancy. -->
     <model name="target_canister">
-      <pose>0.42 -0.28 0.46 0 0 0</pose>
+      <pose>0.40 -0.30 0.80 0 0 0</pose>
       <link name="base_link">
         <inertial>
-          <!-- Density ~1100 kg/m^3, only just negative. Weight 4.66 N against
-               4.34 N of buoyancy leaves 0.32 N net, so it still sits on the
-               panel but a gripper only has to resist that 0.32 N plus drag.
-               At the earlier 2000 kg/m^3 the payload was 4.14 N net-negative -
-               an unrepresentatively heavy subsea lift that slipped out of the
-               jaws no matter how hard they closed. Real intervention cargo is
-               trimmed close to neutral for exactly this reason. -->
-          <mass>0.475</mass>
-          <inertia><ixx>7.13e-4</ixx><iyy>7.13e-4</iyy><izz>2.85e-4</izz>
+          <!-- Trimmed to EXACTLY seawater density (1025 kg/m^3, 0.4428 kg for
+               0.432 L). The payload hovers in the water column instead of
+               resting on a surface, which is how subsea intervention cargo
+               actually behaves - lift baskets and recovered items are trimmed
+               near neutral so an ROV manipulator is not fighting their weight.
+               It also means the arm must grasp a free-floating object rather
+               than one braced against a table. -->
+          <mass>0.4428</mass>
+          <inertia><ixx>6.64e-4</ixx><iyy>6.64e-4</iyy><izz>2.66e-4</izz>
                    <ixy>0</ixy><ixz>0</ixz><iyz>0</iyz></inertia>
           <!-- Added mass belongs HERE, not in the Hydrodynamics plugin. dartsim
                folds <fluid_added_mass> into the spatial inertia and solves it
@@ -396,7 +403,7 @@
     </model>
 
     <!-- NEUTRAL. Density matched to seawater, so it hovers where it is left and
-         drifts under any disturbance. This is the hard case for Phase 2: a
+         drifts under any disturbance. This is the hard case for perception: a
          target whose pose genuinely changes while the arm is approaching. -->
     <model name="neutral_pod">
       <pose>0.30 0.35 0.80 0 0 0</pose>
@@ -460,7 +467,7 @@
          cursor, deterministic frame timing, and no ffmpeg needed.
 
          always_on is false so it only renders while something is subscribed -
-         it costs nothing during normal Phase 2 work.
+         it costs nothing during normal perception work.
 
          Pose solved so the arm's full working envelope AND the intervention
          panel, target and drop-off basket all sit inside the frustum with the

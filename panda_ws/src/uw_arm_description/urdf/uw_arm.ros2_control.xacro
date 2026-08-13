@@ -5,7 +5,7 @@
   Position command interface throughout. Underwater, an effort interface would
   be more faithful, but the fluid added-mass and drag terms (applied by the
   Gazebo Hydrodynamics system) make effort-space gains very sensitive; position
-  control lets joint_trajectory_controller do the work and keeps Phase 2 focused
+  control lets joint_trajectory_controller do the work and keeps perception focused
   on perception rather than on tuning a submerged torque loop.
 
   finger_right_joint is deliberately absent - it is a URDF <mimic> joint and

@@ -1,10 +1,10 @@
-# Phase 1 Technical Report — Underwater 6-DOF Manipulator
+# Technical Report — Underwater Intervention Manipulator
 
 ROS 2 **Jazzy** + **Gazebo Harmonic** (gz-sim 8.11).
 
 ## Status
 
-| Phase 1 item | State |
+| Capability | State |
 |---|---|
 | 1. Arm in ROS 2 + Gazebo, `joint_state_broadcaster` + `joint_trajectory_controller` | **Verified running** |
 | 2. Camera integrated into URDF + Gazebo | **Verified running** |

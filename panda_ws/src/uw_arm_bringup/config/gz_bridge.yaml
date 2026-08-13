@@ -22,7 +22,7 @@
   gz_type_name: "gz.msgs.PointCloudPacked"
   direction: GZ_TO_ROS
 
-# Grasp latch/release. Phase 2 publishes std_msgs/Empty on these.
+# Grasp latch/release. perception publishes std_msgs/Empty on these.
 - ros_topic_name: "/gripper/attach"
   gz_topic_name: "/gripper/attach"
   ros_type_name: "std_msgs/msg/Empty"

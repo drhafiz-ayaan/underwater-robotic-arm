@@ -91,7 +91,7 @@
     </joint>
 
     <!-- Grasp target frame: mid-way up the jaws, on the approach axis.
-         Phase 2 plans grasps to THIS frame, not to tool0. -->
+         perception plans grasps to THIS frame, not to tool0. -->
     <link name="grasp_link"/>
     <joint name="palm_to_grasp" type="fixed">
       <parent link="gripper_palm"/><child link="grasp_link"/>

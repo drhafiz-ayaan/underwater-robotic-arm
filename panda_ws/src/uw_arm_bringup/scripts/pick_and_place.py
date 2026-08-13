@@ -8,7 +8,7 @@ approached the object at all.
 
 WHERE THE TARGET POSE COMES FROM
     The TF frame "target_canister", published by object_tf_publisher.py. In
-    Phase 2 the perception node publishes the same frame name estimated from the
+    perception the perception node publishes the same frame name estimated from the
     wrist RGB-D stream, and nothing in this file changes.
 
 WHAT MAKES THE GRASP HOLD
@@ -77,8 +77,13 @@ JOINTS = ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6"]
 HOME = [1.5708, 0.0, 1.5708, 1.5708, 0.0, 1.5708]
 TARGET_FRAME = "target_canister"
 
-# World-frame release point: 0.10 m above the basket rim (basket top z = 0.50).
-PLACE_XYZ = (0.35, 0.25, 0.60)
+# World-frame release point. Clearance budget above the 0.50 m basket rim:
+#   payload half-height 0.06 + worst-case weld offset 0.06 = 0.12 m minimum.
+# Releasing at 0.60 left the payload's underside ~10 mm INSIDE the basket box and
+# the contact solver ejected it across the scene on release. 0.72 gives margin.
+# The payload is neutrally buoyant, so it simply hovers where it is released -
+# it does not need to be dropped onto anything.
+PLACE_XYZ = (0.35, 0.25, 0.72)
 
 # Object and gripper geometry. Jaw inner faces sit at +/-(JAW_INSET + q), so
 # gripping a box of width w needs q = w/2 - JAW_INSET - squeeze.
@@ -356,12 +361,23 @@ class PickAndPlace(Node):
             self.spin(0.08)
 
     def release(self):
+        """Open the jaws FIRST, then drop the weld.
+
+        Order matters. Detaching first hands a payload that is still between the
+        jaws back to the physics engine; if it is even slightly off-centre - and a
+        free-floating payload always is, because the closing gripper nudges it -
+        the contact solver resolves the overlap by ejecting it. Measured twice:
+        the payload left the gripper at release and finished 0.32 m and 0.47 m
+        away, both times ABOVE the release height. Opening while still welded
+        clears the jaws before anything can push on it.
+        """
+        self.gripper(JAW_OPEN, "Opening jaws to release")
+        self.spin(0.8)
         self.say("Releasing target")
         for _ in range(10):
             self.detach.publish(Empty())
             self.spin(0.06)
-        self.gripper(JAW_OPEN)
-        self.spin(0.6)
+        self.spin(0.8)
 
     def solve(self, p, label, prefer=(0, 0, -1), level=True):
         q, ok, approach, jaw = self.chain.ik(p, self.q, prefer, level)
@@ -404,7 +420,8 @@ class PickAndPlace(Node):
         if not ok:
             return False
         self.goto(q, 5.0, "Approaching target")
-        self.goto(q_grasp, 4.0, "Closing on target")
+        self.goto(q_grasp, 6.0, "Closing on target")
+        self.spin(1.0)
 
         self.gripper(grip_close_position(), "Closing jaws on target", seconds=2.0)
         self.spin(0.8)
@@ -430,8 +447,12 @@ class PickAndPlace(Node):
                                % float(np.linalg.norm(risen)))
         self.say("Payload secured")
 
+        # Carry waypoints prefer the approach the GRASP actually achieved, not
+        # straight down. Re-preferring [0,0,-1] here let IK pick a near-horizontal
+        # gripper (measured approach [+0.29 -0.94 -0.15]) and swing the welded
+        # payload around mid-carry.
         lift = grasp_point - approach * 0.15 + np.array([0.0, 0.0, 0.12])
-        q, ok, _ = self.solve(lift, "lift")
+        q, ok, _ = self.solve(lift, "lift", prefer=approach)
         if ok:
             self.goto(q, 4.0, "Raising the payload")
 

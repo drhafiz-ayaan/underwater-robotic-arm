@@ -46,7 +46,7 @@ class Recorder(Node):
         self.declare_parameter("fps", 30)
         self.declare_parameter("duration", 90.0)
         self.declare_parameter("title", "Underwater 6-DOF Manipulator - Pick and Place")
-        self.declare_parameter("subtitle", "ROS 2 Jazzy | Gazebo Harmonic | Ifra Aerial Robotics")
+        self.declare_parameter("subtitle", "ROS 2 Jazzy | Gazebo Harmonic | Ayaan Aatif")
 
         self.fps = int(self.get_parameter("fps").value)
         self.path = self.get_parameter("output").value

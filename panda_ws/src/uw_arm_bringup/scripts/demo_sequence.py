@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Phase 1 demonstration sequence.
+Scripted demonstration sequence.
 
 Drives the arm through joint-space waypoints via arm_controller and actuates the
 gripper via gripper_controller, publishing a caption on /demo/status that
@@ -9,9 +9,9 @@ record_demo.py burns into the video.
 This is deliberately JOINT SPACE, not a Cartesian pick. The joint axis points in
 uw_arm.urdf.xacro are recovered estimates accurate to a few mm, so a Cartesian
 grasp claim would not be honest until the SolidWorks re-export lands. What this
-does demonstrate is the full Phase 1 stack: controllers accepting trajectories,
+does demonstrate is the full simulation stack: controllers accepting trajectories,
 the gripper actuating, the wrist camera streaming, and the arm moving under
-hydrodynamic loading. Phase 2 replaces this with perception-driven MoveIt goals.
+hydrodynamic loading. Perception-driven picking (pick_and_place.py) replaces it.
 """
 
 import math
@@ -111,7 +111,7 @@ class DemoSequence(Node):
     def run(self):
         if not self.wait_for_servers():
             return
-        self.say("Phase 1 - underwater manipulator bring-up")
+        self.say("Underwater manipulator bring-up")
         for i, (caption, targets, secs) in enumerate(WAYPOINTS):
             if i in GRIPPER_AT:
                 gcap, gpos = GRIPPER_AT[i]

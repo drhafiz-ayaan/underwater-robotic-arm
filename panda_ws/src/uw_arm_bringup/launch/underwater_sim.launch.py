@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Phase 1 full bringup: underwater world + manipulator + controllers + camera.
+Full simulation bringup: underwater world + manipulator + controllers + camera.
 
 Brings up, in dependency order:
   1. Gazebo Harmonic with the underwater world (buoyancy, hydrodynamics, lights)

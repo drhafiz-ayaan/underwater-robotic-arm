@@ -2,7 +2,7 @@
 <!--
   Wrist-mounted RGB-D camera (eye-in-hand).
 
-  Eye-in-hand rather than a fixed world camera: Phase 2 servos the gripper from
+  Eye-in-hand rather than a fixed world camera: perception servos the gripper from
   live TF, and a wrist camera keeps the target in view as the arm closes in,
   which is what makes the "adjust based only on camera feedback" requirement
   tractable in turbid water where standoff range is short.

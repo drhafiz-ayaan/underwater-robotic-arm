@@ -4,12 +4,12 @@
   <name>uw_arm_description</name>
   <version>0.1.0</version>
   <description>
-    URDF/xacro description of the Ifra Aerial Robotics underwater manipulator.
+    URDF/xacro description of the Ayaan Aatif underwater manipulator.
     Rebuilt from the SolidWorks export "arm water.urdf" with recovered joint
     origins, plus wrist RGB-D camera, parallel-jaw gripper, ros2_control
     interfaces and Gazebo Harmonic hydrodynamics.
   </description>
-  <maintainer email="drhafiz.ayaan@gmail.com">Ifra Aerial Robotics</maintainer>
+  <maintainer email="drhafiz.ayaan@gmail.com">Ayaan Aatif</maintainer>
   <license>BSD-3-Clause</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>

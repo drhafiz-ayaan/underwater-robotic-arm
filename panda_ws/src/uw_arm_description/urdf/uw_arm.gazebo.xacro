@@ -122,7 +122,7 @@
     <!--  GRASP MECHANISM                                                    -->
     <!--  Friction alone will not hold a wet object through a full transfer   -->
     <!--  in simulation. One DetachableJoint per graspable model, all created -->
-    <!--  detached; Phase 2 latches by publishing an empty message on         -->
+    <!--  detached; The pick sequence latches by publishing an empty message on         -->
     <!--  /gripper/attach and releases on /gripper/detach.                    -->
     <!--  Add a block here for every graspable model you put in the world.    -->
     <!-- ================================================================== -->
@@ -171,7 +171,7 @@
     <!-- ================================================================== -->
     <!--  WRIST RGB-D SENSOR                                                 -->
     <!--  Narrow far-clip and heavy noise reflect real turbid-water optics:   -->
-    <!--  usable range is short and the depth return is poor. Phase 2's pose  -->
+    <!--  usable range is short and the depth return is poor. the segmenter's pose  -->
     <!--  estimator has to cope with that rather than with a perfect sensor.  -->
     <!-- ================================================================== -->
     <xacro:if value="${use_camera}">

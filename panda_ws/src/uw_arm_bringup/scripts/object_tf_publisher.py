@@ -16,8 +16,8 @@ WHY THIS EXISTS
     for a handful of static-ish objects the cost is irrelevant.
 
 ROLE IN THE PROJECT
-    This is Phase 1 scaffolding: ground truth standing in for perception. The
-    Phase 2 perception node publishes the SAME frame name, `target_canister`,
+    This is Interim scaffolding: ground truth standing in for perception. The
+    perception perception node publishes the SAME frame name, `target_canister`,
     estimated from the wrist RGB-D stream. pick_and_place.py consumes the frame
     either way and does not care which is running - run one or the other, never
     both.

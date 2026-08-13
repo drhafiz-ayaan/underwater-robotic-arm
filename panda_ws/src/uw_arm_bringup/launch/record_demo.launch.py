@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Records the Phase 1 demonstration video.
+Records the demonstration video.
 
 Runs the full underwater simulation headless (no Gazebo GUI, no RViz), drives
 the demo sequence, and writes an MP4 from the in-simulation cameras.
