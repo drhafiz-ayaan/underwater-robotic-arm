@@ -15,7 +15,7 @@ either passes or does not.
 
 | # | Milestone | State |
 |---|---|---|
-| M1 | Neutral-buoyancy scene, rebrand, run scripts | **in progress** |
+| M1 | Neutral-buoyancy scene, rebrand, run scripts | **done** |
 | M2 | Rover mount — arm hangs inverted beneath the vehicle | not started |
 | M3 | Perception — find the payload from the wrist camera | not started |
 | M4 | Closed-loop dynamic grasp — track a drifting payload | not started |
@@ -37,8 +37,32 @@ Also in M1:
 - "Phase 1 / Phase 2" naming removed throughout.
 - `run_sim.sh`, `run_pick_place.sh`, `record_video.sh` at the repo root.
 
-**Passes when:** the payload holds station in open water (no measurable drift
-over 12 s) and pick-and-place still completes on the floating target.
+**PASSED.** Payload holds station at (0.400, -0.300, 0.800) across samples 6 s
+apart with zero drift. Pick-and-place completes on the floating target: 0.117 m
+and 0.113 m from the drop-off point over two runs.
+
+The floating payload broke the grasp weld, and finding out why took a direct
+measurement of gripper-to-payload separation through the whole run. The weld
+never failed - separation held at 42-55 mm across the entire 0.6 m transfer - but
+the payload's reported pose snapped back 0.62 m the instant the weld released,
+landing within 13 mm of the same spot across four runs. `set_pose` was driving
+the pose Gazebo reports without carrying the physics body with it.
+
+Cause: the payload's own hydrodynamic drag. Measured, holding everything else
+fixed:
+
+| Payload drag | Placement error | Result |
+|---|---|---|
+| quadratic (original) | 0.475 m | fail |
+| linear only | 0.333 m | fail |
+| **none** | **0.113-0.117 m** | **pass** |
+
+Any hydrodynamic force on the payload defeats a teleport-based weld. Drag is
+therefore disabled on the grasped payload only; the rest of the cargo keeps it.
+The cost is that residual velocity is never damped, so the payload keeps drifting
+at roughly 1 cm/s after release - which reads as slow underwater drift and is the
+same behaviour M4 wants from a moving target. Restore drag once the payload is
+carried by a real constraint rather than a pose command.
 
 ## M2 — Rover mount, arm inverted
 

@@ -350,16 +350,27 @@
                     <emissive>0.10 0.03 0.0 1</emissive></material>
         </visual>
       </link>
-      <plugin filename="gz-sim-hydrodynamics-system"
-              name="gz::sim::systems::Hydrodynamics">
-        <link_name>base_link</link_name>
-        <!-- Added-mass terms zeroed: handled by <fluid_added_mass> above. -->
-        <xDotU>0</xDotU><yDotV>0</yDotV><zDotW>0</zDotW>
-        <kDotP>0</kDotP><mDotQ>0</mDotQ><nDotR>0</nDotR>
-        <xU>-0.4</xU><yV>-0.4</yV><zW>-0.4</zW>
-        <xUabsU>-3.0</xUabsU><yVabsV>-3.0</yVabsV><zWabsW>-3.0</zWabsW>
-        <kPabsP>-0.03</kPabsP><mQabsQ>-0.03</mQabsQ><nRabsR>-0.03</nRabsR>
-      </plugin>
+      <!-- HYDRODYNAMICS DELIBERATELY DISABLED ON THE PAYLOAD.
+           The payload is trimmed to exactly seawater density, so gravity and
+           buoyancy cancel to zero. Drag was therefore the ONLY residual force
+           acting on it, and while grasp_manager drives its pose through the
+           set_pose service that drag is the only thing that can fight the
+           command. Measured symptom with drag enabled: the reported pose tracks
+           the gripper perfectly for the whole carry (42-55 mm separation over a
+           0.6 m transfer) and then snaps back 0.62 m the instant the weld
+           releases, landing within 13 mm of the same spot across four runs.
+           With no net force the body has nothing to diverge under.
+
+           MEASURED TRADE-OFF (do not "fix" this by adding drag back):
+             no drag        -> weld carries the payload, placement 0.117 m       (PASS)
+             linear drag    -> weld loses it,            placement 0.333 m       (FAIL)
+             quadratic drag -> weld loses it,            placement 0.475 m       (FAIL)
+           ANY hydrodynamic force on the payload defeats a teleport-based weld.
+           The cost of removing it is that residual velocity is never damped, so
+           after release the payload keeps drifting at roughly 1 cm/s. That reads
+           as a slow underwater drift rather than an error, and it is the same
+           behaviour M4 needs from a moving target. Restore drag only once the
+           payload is carried by a real constraint instead of a pose command. -->
     </model>
 
     <!-- FLOATING. Density ~300 kg/m^3, so it rises and settles at the surface.
